@@ -2,6 +2,8 @@ import User from "./models/User.js";
 import { Router } from "express"; // lets us organize related routes in a seperate file instead of putting every route in server.ts
 // authentication routes can be here 
 import bcrypt from "bcryptjs";// to hash passwords
+import jwt from "jsonwebtoken";
+import { authenticateToken } from "./middleware/authMiddleware.js";
 
 const authRouter = Router();
 authRouter.post("/login", async (req, res) => { // this is a post end point and post is used because login sends private data in the request body
@@ -65,8 +67,27 @@ authRouter.post("/login", async (req, res) => { // this is a post end point and 
     });
   }
   // temporary success response until we create the account page
+  // gets the JWT secret from the .env file
+const jwtSecret = process.env.JWT_SECRET; // reads the private value added in the .env file
+
+if (!jwtSecret) {
+  throw new Error("JWT_SECRET is missing");
+} // checks whether the secret exists
+
+// creates a token containing the logged-in user's ID
+const token = jwt.sign(
+  {
+    userId: existingUser.id,
+  },
+  jwtSecret,
+  {
+    expiresIn: "1h", // token is valid for 1h
+  }
+);
+// sends the token and safe user data to the frontend containing the user id so later when the backend sends the request it knows which user
   return res.status(200).json({
     message: "Successfully signed in",
+      token: token,// then this response sends token to the react
     user: {
       id: existingUser.id,
       name: existingUser.name,
@@ -89,7 +110,8 @@ authRouter.post("/signup", async (req, res) => {
       message: "name and password are required",
     });
   }
-   if (!name && !email && password) {
+
+  if (!name && !email && password) {
     return res.status(400).json({
       message: "name and email are required",
     });
@@ -157,9 +179,28 @@ authRouter.post("/signup", async (req, res) => {
     passwordHash: passwordHash,
   }); // this tells sequalize to enter the new password into a new row
 
+  const jwtSecret = process.env.JWT_SECRET; // reads the private value added in the .env file
+
+  if (!jwtSecret) {
+    throw new Error("JWT_SECRET is missing");
+  } // checks whether the secret exists
+
+  // creates a token containing the logged-in user's ID
+  const token = jwt.sign(
+    {
+      userId: newUser.id,
+    },
+    jwtSecret,
+    {
+      expiresIn: "1h", // token is valid for 1h
+    }
+  );
+
+  // sends the token and safe user data to the frontend containing the user id so later when the backend sends the request it knows which user
   // sends the created user data back without returning the password or password hash
   return res.status(201).json({
     message: "Account created successfully",
+    token: token,
     user: {
       id: newUser.id,
       name: newUser.name,
@@ -168,6 +209,26 @@ authRouter.post("/signup", async (req, res) => {
   });
 
   // existing user gets checked
+}); // closes signup route
+
+authRouter.get("/me", authenticateToken, async (req, res) => { //creates the current user endpoint
+  const userId = res.locals.userId;
+
+  const currentUser = await User.findByPk(userId);
+
+  if (!currentUser) {
+    return res.status(404).json({
+      message: "User not found",
+    });
+  }
+
+  return res.status(200).json({
+    user: {
+      id: currentUser.id,
+      name: currentUser.name,
+      email: currentUser.email,
+    },
+  });
 });
 
 export default authRouter;

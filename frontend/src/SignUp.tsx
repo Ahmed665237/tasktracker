@@ -14,13 +14,51 @@ interface SignUpData {
   name:string
 }// this is where the value of user will be held and validated
 const SignUp = ({sign_UpButton,email_label,password_label,name_label}:SignUpList) => { // react only recieves one props object
+   const handleSubmit = async ( // this fn runs when the form is submitted and event shows the submission of the form
+    event: React.FormEvent<HTMLFormElement> // tells ype script where is  it comming from the form (html)
+  ) => {
+    event.preventDefault(); //submitting a request make the page reload this prevents it
+    // and the browser can reload before finishing the request
+  
+    try {
+      const response = await fetch(
+        "http://localhost:3000/api/auth/signup", // fetch sends an http request
+        // the URL is your backend end point
+        {
+          method: "POST", // type of request
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ // converts to json text so it can be sent to the http
+            email: SignUpData.email,
+            password: SignUpData.password, // gets the current data validated by the user
+            name : SignUpData.name
+          }),
+        }
+      );
+  
+      const data = await response.json(); // wait till the backend sends a response
+      if (!response.ok) {
+        setErrorMessage(data.message);
+         setTimeout(() => setErrorMessage(""), 3000); // makes a the error message disapear
+        return;
+    }
+    setErrorMessage("");
+    } catch (error) { // runs if the request fails
+      alert("Could not connect to the backend");
+      console.error(error);
+    }
+  };
+  ///////////////////////////////////////////////////////////////////////////
   const [SignUpData, setSignUpData] = useState<SignUpData>({
   name:'',
   email: '',
   password: '',
   });
+   const [errorMessage, setErrorMessage] = useState("");
+   const [showPassword, setShowPassword] = useState(false);
   return (<>
-  <form>
+  <form onSubmit={handleSubmit} noValidate>
   <div className="d-flex justify-content-center align-items-center min-vh-100">
     <div className="w-25"> 
       <div className="d-flex flex-column gap-3">
@@ -38,13 +76,32 @@ const SignUp = ({sign_UpButton,email_label,password_label,name_label}:SignUpList
           className="form-control"
           placeholder={email_label}
         />
-        <input
-        value={SignUpData.password}
-        onChange={(event)=>setSignUpData({...SignUpData,password:event.target.value})}
-          type="password"
-          className="form-control"
-          placeholder={password_label}
-        />
+
+      <input
+    type={showPassword ? "text" : "password"}
+    value={SignUpData.password}
+    onChange={(event) =>
+      setSignUpData({
+        ...SignUpData,
+        password: event.target.value,
+      })
+    }
+    className="form-control"
+    placeholder="Password"
+  />
+  <button
+    type="button"
+    className="btn btn-outline-secondary"
+    onClick={() => setShowPassword(!showPassword)}
+  >
+    {showPassword ? "Hide password" : "Show password"}
+  </button>
+  
+    {errorMessage && (
+    <p className="text-danger text-center mt-2">
+      {errorMessage}
+    </p>
+)}
       </div>
       <button
         type="submit"
