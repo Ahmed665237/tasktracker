@@ -1,12 +1,13 @@
 import User from "./models/User.js";
-import { Router } from "express"; // lets us organize related routes in a seperate file instead of putting every route in server.ts
+import { Router} from "express"; // lets us organize related routes in a seperate file instead of putting every route in server.ts
+import type { Request, Response } from "express";
 // authentication routes can be here 
 import bcrypt from "bcryptjs";// to hash passwords
 import jwt from "jsonwebtoken";
 import { authenticateToken } from "./middleware/authMiddleware.js";
 
 const authRouter = Router();
-authRouter.post("/login", async (req, res) => { // this is a post end point and post is used because login sends private data in the request body
+authRouter.post("/login", async (req:Request, res:Response) => { // this is a post end point and post is used because login sends private data in the request body
   // when a client sends a post request and the backend sends a response
   const { email, password } = req.body; // this extracts the two value from the json request and we use body as we recieve values
   if (!email && password) {
@@ -52,7 +53,7 @@ authRouter.post("/login", async (req, res) => { // this is a post end point and 
   // runs if the email does not exist in the database
   if (!existingUser) {
     return res.status(401).json({
-      message: "Invalid email",
+      message: "Invalid email or password",
     });
   }
   // compares the entered password with the password hash stored in the database
@@ -63,7 +64,7 @@ authRouter.post("/login", async (req, res) => { // this is a post end point and 
   // runs if the entered password is incorrect
   if (!passwordIsCorrect) {
     return res.status(401).json({
-      message: "Invalid password",
+      message: "Invalid email or password",
     });
   }
   // temporary success response until we create the account page

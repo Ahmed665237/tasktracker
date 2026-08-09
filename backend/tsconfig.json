@@ -10,7 +10,7 @@
     "module": "nodenext",
      "moduleResolution": "NodeNext", //did this
     "target": "esnext",
-    "types": [],
+    //"types": [], // as this can make the NOde globals unrecognized
     // For nodejs:
     // "lib": ["esnext"],
     // "types": ["node"],
