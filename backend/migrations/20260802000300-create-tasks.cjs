@@ -25,21 +25,21 @@ module.exports = {
         allowNull: true,
       },
       status: {
-        type: Sequelize.ENUM("TODO", "IN_PROGRESS", "DONE"),
+        type: Sequelize.ENUM("To Do", "In Progress", "Done"),
         allowNull: false,
-        defaultValue: "TODO",
+        defaultValue: "To Do",
       },
       priority: {
-        type: Sequelize.ENUM("LOW", "MEDIUM", "HIGH"),
-        allowNull: true,
-        defaultValue: "MEDIUM",
+        type: Sequelize.ENUM("Low", "Medium", "High"),
+        allowNull: false,
+        defaultValue: "Medium",
       },
-      estimated_time_minutes: {
+      estimated_minutes: {
         type: Sequelize.INTEGER,
         allowNull: true,
       },
       due_date: {
-        type: Sequelize.DATE,
+        type: Sequelize.DATEONLY,
         allowNull: true,
       },
       created_at: {

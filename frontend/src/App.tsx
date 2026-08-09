@@ -2,6 +2,7 @@ import React from "react";
 import Login from "./Login";
 import SignUp from "./SignUp";
 import Home from "./Home";
+
 import {
   BrowserRouter,
   Routes,
@@ -10,22 +11,39 @@ import {
 } from "react-router-dom"; // activates routing
 
 const App = () => {
-  const token = localStorage.getItem("token"); // this asks the browser do you have the login saved and it stores it here
+  /*
+    This asks the browser whether a login token
+    is already saved in localStorage.
+
+    If a token exists, the user is sent to /home.
+    If no token exists, the user is sent to /login.
+  */
+  const token = localStorage.getItem("token");
+
   return (
     <BrowserRouter>
       <Routes>
-        {/* redirects the empty root URL to the login page */}
+        {/* Redirects the empty root URL */}
         <Route
           path="/"
-              element={
+          element={
             token ? (
+              /*
+                If the token exists, the user is sent
+                to the Home dashboard.
+              */
               <Navigate to="/home" replace />
             ) : (
-              <Navigate to="/login" replace /> // if the first is true goes to home page
+              /*
+                If the token does not exist, the user
+                is sent to the Login page.
+              */
+              <Navigate to="/login" replace />
             )
           }
         />
 
+        {/* Login page */}
         <Route
           path="/login"
           element={
@@ -37,6 +55,7 @@ const App = () => {
           }
         />
 
+        {/* Signup page */}
         <Route
           path="/signup"
           element={
@@ -49,10 +68,105 @@ const App = () => {
           }
         />
 
-        {/* home page shown after successful login */}
+        {/* Home page shown after successful login */}
         <Route
           path="/home"
           element={<Home />}
+        />
+
+        {/*
+          This route will be used when the user opens
+          the Create Project modal.
+
+          Home still appears behind the modal because
+          this route also renders the Home component.
+        */}
+        <Route
+          path="/projects/new"
+          element={<Home />}
+        />
+
+        {/*
+          This route will be used when the user edits
+          an existing project.
+
+          :projectId is a route parameter.
+
+          Example:
+          /projects/7/edit
+
+          In this example, projectId is 7.
+        */}
+        <Route
+          path="/projects/:projectId/edit"
+          element={<Home />}
+        />
+
+        {/*
+          This route will be used when the user creates
+          a new task inside a specific project.
+
+          Example:
+          /projects/7/tasks/new
+
+          This means:
+          create a new task inside project 7.
+        */}
+        <Route
+          path="/projects/:projectId/tasks/new"
+          element={<Home />}
+        />
+
+        {/*
+          This route will be used to open the details
+          of one existing task.
+
+          Example:
+          /projects/7/tasks/15
+
+          projectId = 7
+          taskId = 15
+        */}
+        <Route
+          path="/projects/:projectId/tasks/:taskId"
+          element={<Home />}
+        />
+
+        {/*
+          This route will be used when the user edits
+          an existing task.
+
+          Example:
+          /projects/7/tasks/15/edit
+
+          projectId = 7
+          taskId = 15
+        */}
+        <Route
+          path="/projects/:projectId"
+          element={<Home />}
+        />
+        <Route
+          path="/projects/:projectId/tasks/:taskId/edit"
+          element={<Home />}
+        />
+
+        {/*
+          This catches an unknown URL.
+
+          For now, an unknown route returns the user
+          to the Home page when logged in, or Login
+          when no token exists.
+        */}
+        <Route
+          path="*"
+          element={
+            token ? (
+              <Navigate to="/home" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
         />
       </Routes>
     </BrowserRouter>
@@ -61,8 +175,17 @@ const App = () => {
 
 // sign up and sign in
 
-// 'path' is in the route where it checks the url in the browser to decide which component to show
-// each route connects the URL to one component
+/*
+  "path" is the route React checks against the URL
+  in the browser.
+
+  "element" is the component React displays when
+  that URL matches.
+
+  The project and task modal routes all display Home,
+  because the modal must appear over the dashboard
+  instead of replacing the dashboard.
+*/
 
 export default App;
 
