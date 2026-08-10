@@ -81,13 +81,13 @@ const Login = ({
 
     // Stops before contacting the backend if frontend validation fails
     if (hasValidationError) {
-      return;
+      return; // the it exits handle submit then it renders error so when user enters input 
     }
 
     try {
       const response = await fetch(
         "http://localhost:3000/api/auth/login", // fetch sends an http request
-        // the URL is your backend endpoint
+        // the URL is your backend endpoint (front end sends email request to the backend)
         {
           method: "POST", // type of request
           headers: {
@@ -101,7 +101,7 @@ const Login = ({
         }
       );
 
-      const data = await response.json(); // wait till the backend sends a response
+      const data = await response.json(); // wait till the backend sends a response from auth.ts
 
       if (!response.ok) {
         // This is a general backend error because the backend does not reveal
@@ -110,7 +110,7 @@ const Login = ({
 
         setTimeout(() => {
           setErrorMessage("");
-        }, 3000); // makes the error message disappear
+        }, 3000); // makes the error message disappear after n sec
 
         return;
       }
