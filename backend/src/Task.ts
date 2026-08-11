@@ -156,7 +156,6 @@ Task.init(
       type: DataTypes.DATEONLY,
       allowNull: true,
       field: "due_date",
-    
     },
   },
   {
@@ -164,13 +163,6 @@ Task.init(
     tableName: "tasks",
     timestamps: true,
     underscored: true,
-       /*
-      Enables soft delete.
-
-      Instead of physically deleting a task,
-      Sequelize will set deleted_at.
-    */
-    paranoid: true,
   }
 );
 

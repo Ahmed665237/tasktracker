@@ -77,6 +77,20 @@ function ProjectDashboard({
   const [projects, setProjects] = useState<Project[]>([]);
 
   /*
+    Becomes true after the logged-in user's
+    projects have been loaded from the backend.
+  */
+  const [projectsLoaded, setProjectsLoaded] =
+    useState(false);
+
+  /*
+    Stores a short message shown at the
+    top-center of the dashboard.
+  */
+  const [pageMessage, setPageMessage] =
+    useState("");
+
+  /*
     Stores the ID of the project currently opened by the user.
 
     null means no project is currently selected.
@@ -120,14 +134,14 @@ function ProjectDashboard({
   /*
     Stores the task-search value.
 
-    It is not connected to real tasks yet.
+    This value is sent to the backend as a query parameter.
   */
   const [searchText, setSearchText] = useState("");
 
   /*
     Stores the selected task status filter.
 
-    It will be used after task data is added.
+    This value is sent to the backend as a query parameter.
   */
   const [statusFilter, setStatusFilter] =
     useState("All");
@@ -135,7 +149,7 @@ function ProjectDashboard({
   /*
     Stores the selected task priority filter.
 
-    It will be used after task data is added.
+    This value is sent to the backend as a query parameter.
   */
   const [priorityFilter, setPriorityFilter] =
     useState("All");
@@ -143,16 +157,15 @@ function ProjectDashboard({
   /*
     Controls whether only overdue tasks should appear.
 
-    It will be connected when task data is added.
+    When enabled, overdue=true is sent to the backend.
   */
   const [showOverdueOnly, setShowOverdueOnly] =
     useState(false);
 
 
   /*
-    Stores all tasks temporarily in React.
-
-    Later, this list will come from the backend.
+    Stores the tasks returned by the backend
+    for the currently selected project.
   */
   const [tasks, setTasks] = useState<Task[]>([]);
 
@@ -177,6 +190,16 @@ function ProjectDashboard({
   */
   const [viewingTaskId, setViewingTaskId] =
     useState<number | null>(null);
+
+  /*
+    Stores the task loaded directly from
+    GET /api/projects/:projectId/tasks/:taskId.
+
+    This stays separate from the board task list
+    because search/filtering can hide a valid task.
+  */
+  const [routeTask, setRouteTask] =
+    useState<Task | null>(null);
 
   /*
     Stores the task title written inside the modal.
@@ -317,70 +340,16 @@ function ProjectDashboard({
     ) || null;
 
   /*
-    Finds tasks that belong only to the selected project.
-  */
-  const selectedProjectTasks = tasks.filter(
-    (task) => task.projectId === selectedProjectId
-  );
-
-  /*
     Finds the complete task object currently being viewed.
+
+    This must remain separate from the search/filter logic
+    because the task details popup uses it.
   */
   const viewedTask =
-    tasks.find(
-      (task) => task.id === viewingTaskId
-    ) || null;
-
-  /*
-    Applies the current search and filters together.
-
-    Search checks both the title and description.
-  */
-  const filteredTasks = selectedProjectTasks.filter(
-    (task) => {
-      const normalizedSearch =
-        searchText.trim().toLowerCase();
-
-      const matchesSearch =
-        normalizedSearch === "" ||
-        task.title
-          .toLowerCase()
-          .includes(normalizedSearch) ||
-        task.description
-          .toLowerCase()
-          .includes(normalizedSearch);
-
-      const matchesStatus =
-        statusFilter === "All" ||
-        task.status === statusFilter;
-
-      const matchesPriority =
-        priorityFilter === "All" ||
-        task.priority === priorityFilter;
-
-      /*
-        A task is overdue only when:
-        - it has a due date
-        - the due date has passed
-        - its status is not Done
-      */
-      const isOverdue =
-        task.dueDate !== "" &&
-        new Date(task.dueDate) <
-          new Date(new Date().toDateString()) &&
-        task.status !== "Done";
-
-      const matchesOverdue =
-        !showOverdueOnly || isOverdue;
-
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesPriority &&
-        matchesOverdue
-      );
-    }
-  );
+    routeTask &&
+    routeTask.id === viewingTaskId
+      ? routeTask
+      : null;
 
   /*
     Opens the Create Task modal for the selected project.
@@ -789,7 +758,7 @@ function ProjectDashboard({
   };
 
  /*
-  Soft deletes the task currently being edited.
+  Permanently deletes the task currently being edited.
 
   The frontend calls:
   DELETE /api/projects/:projectId/tasks/:taskId
@@ -837,7 +806,7 @@ const handleDeleteTask = async () => {
 
   try {
     /*
-      Tells the backend to soft delete
+      Tells the backend to permanently delete
       the selected task.
     */
     const response = await fetch(
@@ -869,7 +838,7 @@ const handleDeleteTask = async () => {
     }
 
     /*
-      Removes the soft-deleted task
+      Removes the deleted task
       from the current React screen.
     */
     setTasks((currentTasks) =>
@@ -940,14 +909,10 @@ const handleDeleteTask = async () => {
   };
 
   /*
-    Soft deletes the currently selected project.
+    Permanently deletes the currently selected project.
 
     The frontend calls:
     DELETE /api/projects/:projectId
-
-    Because the backend Project model uses
-    paranoid: true, the project row stays
-    in PostgreSQL and deleted_at is filled in.
   */
   const handleDeleteProject = async () => {
     /*
@@ -989,7 +954,7 @@ const handleDeleteTask = async () => {
 
     try {
       /*
-        Tells the backend to soft delete
+        Tells the backend to permanently delete
         the selected project.
       */
       const response = await fetch(
@@ -1119,25 +1084,91 @@ const handleDeleteTask = async () => {
     }
 
     /*
-      Edit Project is still using React state for now.
+      EDIT PROJECT
 
-      Later, this will call:
-      PUT /api/projects/:projectId
+      Sends the updated project to the backend
+      so the change is persisted in PostgreSQL.
     */
     if (editingProjectId !== null) {
-      setProjects((currentProjects) =>
-        currentProjects.map((project) =>
-          project.id === editingProjectId
-            ? {
-                ...project,
-                name:
-                  projectName.trim(),
-                description:
-                  projectDescription.trim(),
-              }
-            : project
-        )
-      );
+      const token =
+        localStorage.getItem("token");
+
+      if (!token) {
+        console.error(
+          "Authentication token is missing"
+        );
+
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `http://localhost:3000/api/projects/${editingProjectId}`,
+          {
+            method: "PUT",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Authorization:
+                `Bearer ${token}`,
+            },
+
+            body: JSON.stringify({
+              name:
+                projectName.trim(),
+
+              description:
+                projectDescription.trim(),
+            }),
+          }
+        );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          console.error(
+            "Unable to update project:",
+            data
+          );
+
+          return;
+        }
+
+        /*
+          React displays the project returned
+          by the backend after the DB update.
+        */
+        setProjects((currentProjects) =>
+          currentProjects.map((project) =>
+            project.id === editingProjectId
+              ? {
+                  id:
+                    data.project.id,
+
+                  name:
+                    data.project.name,
+
+                  description:
+                    data.project.description ?? "",
+                }
+              : project
+          )
+        );
+
+        closeProjectModal();
+
+        return;
+      } catch (error) {
+        console.error(
+          "Error updating project:",
+          error
+        );
+
+        return;
+      }
     } else {
       /*
         Gets the JWT token saved when
@@ -1420,6 +1451,11 @@ const handleDeleteTask = async () => {
         setProjects(
           data.projects
         );
+
+        /*
+          The real project list is now loaded.
+        */
+        setProjectsLoaded(true);
       } catch (error) {
         console.error(
           "Error loading projects:",
@@ -1435,33 +1471,85 @@ const handleDeleteTask = async () => {
     Keeps the selected project synchronized
     with the project ID inside the URL.
 
-    This works for:
-    /projects/10
-    /projects/10/edit
-    /projects/10/tasks/new
-    /projects/10/tasks/5
-    /projects/10/tasks/5/edit
+    It also validates manually typed project URLs.
   */
   useEffect(() => {
     if (!projectId) {
       return;
     }
 
+    if (!projectsLoaded) {
+      return;
+    }
+
     const numericProjectId =
       Number(projectId);
 
-    if (!Number.isNaN(numericProjectId)) {
-      setSelectedProjectId(
-        numericProjectId
+    const projectExists =
+      !Number.isNaN(numericProjectId) &&
+      projects.some(
+        (project) =>
+          project.id === numericProjectId
       );
+
+    if (!projectExists) {
+      setSelectedProjectId(null);
+      setPageMessage(
+        "Project does not exist"
+      );
+
+      navigate(
+        "/home",
+        {
+          replace: true,
+        }
+      );
+
+      return;
     }
+
+    setSelectedProjectId(
+      numericProjectId
+    );
   }, [
     projectId,
+    projects,
+    projectsLoaded,
+    navigate,
+  ]);
+
+  /*
+    Hides the message automatically
+    after three seconds.
+  */
+  useEffect(() => {
+    if (pageMessage === "") {
+      return;
+    }
+
+    const messageTimer =
+      window.setTimeout(
+        () => {
+          setPageMessage("");
+        },
+        3000
+      );
+
+    return () => {
+      window.clearTimeout(
+        messageTimer
+      );
+    };
+  }, [
+    pageMessage,
   ]);
       
   /*
-    Loads all tasks for the currently
-    selected project from the backend.
+    Loads tasks for the currently selected project.
+
+    Search and filtering are NOT performed in React.
+    The frontend sends query parameters to the existing
+    GET endpoint and the backend/PostgreSQL performs them.
   */
   useEffect(() => {
     /*
@@ -1489,57 +1577,134 @@ const handleDeleteTask = async () => {
     }
 
     /*
-      Loads tasks from the backend.
+      Uses a short delay for search typing so
+      the frontend does not send a request
+      after every single keystroke immediately.
     */
-    const loadTasks = async () => {
-      try {
-        const response = await fetch(
-          `http://localhost:3000/api/projects/${selectedProjectId}/tasks`,
-          {
-            method: "GET",
+    const requestTimer = window.setTimeout(
+      async () => {
+        try {
+          /*
+            Builds query parameters for the backend.
 
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
+            "All" values are not sent because
+            they mean no filter should be applied.
+          */
+          const queryParams =
+            new URLSearchParams();
+
+          if (searchText.trim() !== "") {
+            queryParams.set(
+              "search",
+              searchText.trim()
+            );
           }
-        );
 
-        const data =
-          await response.json();
+          if (statusFilter !== "All") {
+            queryParams.set(
+              "status",
+              statusFilter
+            );
+          }
 
-        if (!response.ok) {
-          console.error(
-            "Unable to load tasks:",
-            data
+          if (priorityFilter !== "All") {
+            queryParams.set(
+              "priority",
+              priorityFilter
+            );
+          }
+
+          if (showOverdueOnly) {
+            queryParams.set(
+              "overdue",
+              "true"
+            );
+          }
+
+          /*
+            Keeps the same GET endpoint.
+
+            The query string is added only when
+            search/filter values exist.
+          */
+          const queryString =
+            queryParams.toString();
+
+          const tasksUrl =
+            `http://localhost:3000/api/projects/${selectedProjectId}/tasks${
+              queryString
+                ? `?${queryString}`
+                : ""
+            }`;
+
+          const response = await fetch(
+            tasksUrl,
+            {
+              method: "GET",
+
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
           );
 
-          return;
+          const data =
+            await response.json();
+
+          if (!response.ok) {
+            console.error(
+              "Unable to load tasks:",
+              data
+            );
+
+            return;
+          }
+
+          /*
+            The backend has already performed
+            search and filtering.
+
+            React only displays the tasks
+            returned by the backend.
+          */
+          setTasks(
+            data.tasks
+          );
+        } catch (error) {
+          console.error(
+            "Error loading tasks:",
+            error
+          );
         }
+      },
+      300
+    );
 
-        /*
-          Replaces the React task list
-          with the tasks returned by PostgreSQL.
-        */
-        setTasks(
-          data.tasks
-        );
-      } catch (error) {
-        console.error(
-          "Error loading tasks:",
-          error
-        );
-      }
+    /*
+      Cancels the previous delayed request when
+      the user changes search/filter values quickly.
+    */
+    return () => {
+      window.clearTimeout(
+        requestTimer
+      );
     };
-
-    loadTasks();
-  }, [selectedProjectId]);
+  }, [
+    selectedProjectId,
+    searchText,
+    statusFilter,
+    priorityFilter,
+    showOverdueOnly,
+  ]);
 
   
 
   /*
     Opens and prepares the task modal depending
     on the current browser URL.
+
+    Direct task URLs are checked through the backend.
   */
   useEffect(() => {
     /*
@@ -1547,13 +1712,14 @@ const handleDeleteTask = async () => {
       /projects/:projectId/tasks/new
     */
     if (isCreateTaskRoute && projectId) {
-      const numericProjectId = Number(projectId);
+      const numericProjectId =
+        Number(projectId);
 
-      /*
-        Keeps the project from the URL selected.
-      */
-      setSelectedProjectId(numericProjectId);
+      setSelectedProjectId(
+        numericProjectId
+      );
       setViewingTaskId(null);
+      setRouteTask(null);
       setEditingTaskId(null);
       setShowTaskModal(true);
 
@@ -1561,99 +1727,227 @@ const handleDeleteTask = async () => {
     }
 
     /*
-      View Task route:
+      View/Edit Task routes:
       /projects/:projectId/tasks/:taskId
-    */
-    if (
-      isViewTaskRoute &&
-      projectId &&
-      taskId
-    ) {
-      const numericProjectId = Number(projectId);
-      const numericTaskId = Number(taskId);
-
-      const taskToView = tasks.find(
-        (task) =>
-          task.id === numericTaskId &&
-          task.projectId === numericProjectId
-      );
-
-      if (taskToView) {
-        setSelectedProjectId(
-          taskToView.projectId
-        );
-        setViewingTaskId(taskToView.id);
-        setShowTaskModal(false);
-      }
-
-      return;
-    }
-
-    /*
-      Edit Task route:
       /projects/:projectId/tasks/:taskId/edit
     */
     if (
-      isEditTaskRoute &&
+      (isViewTaskRoute || isEditTaskRoute) &&
       projectId &&
       taskId
     ) {
-      const numericProjectId = Number(projectId);
-      const numericTaskId = Number(taskId);
+      const numericProjectId =
+        Number(projectId);
 
-      const taskToEdit = tasks.find(
-        (task) =>
-          task.id === numericTaskId &&
-          task.projectId === numericProjectId
-      );
+      const numericTaskId =
+        Number(taskId);
 
-      if (taskToEdit) {
-        setSelectedProjectId(
-          taskToEdit.projectId
+      const token =
+        localStorage.getItem("token");
+
+      if (!token) {
+        console.error(
+          "Authentication token is missing"
         );
-        setViewingTaskId(null);
-        setTaskTitle(taskToEdit.title);
-        setTaskDescription(
-          taskToEdit.description
-        );
-        setTaskStatus(taskToEdit.status);
-        setTaskPriority(taskToEdit.priority);
-        setEstimatedMinutes(
-          taskToEdit.estimatedMinutes === null
-            ? ""
-            : String(
-                taskToEdit.estimatedMinutes
-              )
-        );
-        setDueDate(taskToEdit.dueDate);
-        setTaskTitleError("");
-        setEditingTaskId(taskToEdit.id);
-        setShowTaskModal(true);
+
+        return;
       }
+
+      /*
+        Loads the exact task from the backend.
+
+        This is important because a valid task may
+        currently be hidden by search/filtering.
+      */
+      const loadTaskFromUrl =
+        async () => {
+          try {
+            const response =
+              await fetch(
+                `http://localhost:3000/api/projects/${numericProjectId}/tasks/${numericTaskId}`,
+                {
+                  method: "GET",
+
+                  headers: {
+                    Authorization:
+                      `Bearer ${token}`,
+                  },
+                }
+              );
+
+            const data =
+              await response.json();
+
+            /*
+              If the task does not exist,
+              return to the project board.
+            */
+            if (response.status === 404) {
+              setRouteTask(null);
+              setViewingTaskId(null);
+              setEditingTaskId(null);
+              setShowTaskModal(false);
+              setPageMessage(
+                "Task does not exist"
+              );
+
+              navigate(
+                `/projects/${numericProjectId}`,
+                {
+                  replace: true,
+                }
+              );
+
+              return;
+            }
+
+            if (!response.ok) {
+              console.error(
+                "Unable to load task:",
+                data
+              );
+
+              return;
+            }
+
+            const loadedTask: Task = {
+              id:
+                data.task.id,
+
+              projectId:
+                data.task.projectId,
+
+              title:
+                data.task.title,
+
+              description:
+                data.task.description ?? "",
+
+              status:
+                data.task.status,
+
+              priority:
+                data.task.priority,
+
+              estimatedMinutes:
+                data.task.estimatedMinutes,
+
+              dueDate:
+                data.task.dueDate ?? "",
+
+              createdAt:
+                data.task.createdAt,
+
+              updatedAt:
+                data.task.updatedAt,
+            };
+
+            setRouteTask(
+              loadedTask
+            );
+
+            setSelectedProjectId(
+              loadedTask.projectId
+            );
+
+            /*
+              Read-only task view.
+            */
+            if (isViewTaskRoute) {
+              setViewingTaskId(
+                loadedTask.id
+              );
+              setEditingTaskId(null);
+              setShowTaskModal(false);
+
+              return;
+            }
+
+            /*
+              Edit task view.
+            */
+            setViewingTaskId(null);
+            setTaskTitle(
+              loadedTask.title
+            );
+            setTaskDescription(
+              loadedTask.description
+            );
+            setTaskStatus(
+              loadedTask.status
+            );
+            setTaskPriority(
+              loadedTask.priority
+            );
+            setEstimatedMinutes(
+              loadedTask.estimatedMinutes === null
+                ? ""
+                : String(
+                    loadedTask.estimatedMinutes
+                  )
+            );
+            setDueDate(
+              loadedTask.dueDate
+            );
+            setTaskTitleError("");
+            setEditingTaskId(
+              loadedTask.id
+            );
+            setShowTaskModal(true);
+          } catch (error) {
+            console.error(
+              "Error loading task:",
+              error
+            );
+          }
+        };
+
+      loadTaskFromUrl();
 
       return;
     }
 
     /*
-      Any other route hides the task modal
-      and the read-only task view.
+      Any other route hides task-specific UI.
     */
     setShowTaskModal(false);
     setViewingTaskId(null);
+    setRouteTask(null);
   }, [
     isCreateTaskRoute,
     isViewTaskRoute,
     isEditTaskRoute,
     projectId,
     taskId,
-    tasks,
+    navigate,
   ]);
-  
+
 
   return (
     <>
       <style>
         {`
+          /*
+            Shows short validation messages
+            at the top-center of the page.
+          */
+          .dashboard-message {
+            position: fixed;
+            top: 22px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: #fff1f2;
+            border: 1px solid #fecdd3;
+            color: #be123c;
+            border-radius: 10px;
+            padding: 11px 16px;
+            box-shadow:
+              0 10px 24px
+              rgba(15, 23, 42, 0.12);
+            font-weight: 600;
+          }
+
           /*
             Controls the maximum width and spacing
             of the dashboard content.
@@ -2567,6 +2861,12 @@ const handleDeleteTask = async () => {
         `}
       </style>
 
+      {pageMessage && (
+        <div className="dashboard-message">
+          {pageMessage}
+        </div>
+      )}
+
       <main className="home-content">
         {/* Welcome area */}
         <section className="welcome-section">
@@ -2835,11 +3135,14 @@ const handleDeleteTask = async () => {
                       ]
                     ).map((column) => {
                       /*
-                        Gets only the filtered tasks that
-                        belong in this specific status column.
+                        The backend has already applied the
+                        user's search and filter selections.
+
+                        This only groups the returned tasks
+                        into the correct visual board column.
                       */
                       const columnTasks =
-                        filteredTasks.filter(
+                        tasks.filter(
                           (task) =>
                             task.status ===
                             column.title

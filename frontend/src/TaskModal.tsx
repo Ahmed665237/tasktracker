@@ -358,15 +358,48 @@ function TaskModal({
               id="estimated-minutes"
               type="number"
               min="1"
+              max="10080"
               className="task-form-input"
               value={estimatedMinutes}
-              onChange={(event) =>
+
+              /*
+                Keeps the frontend estimate consistent
+                with the backend validation.
+
+                10080 minutes = 7 days.
+              */
+              onChange={(event) => {
+                const value =
+                  event.target.value;
+
+                /*
+                  Empty is allowed because
+                  estimated time is optional.
+                */
+                if (value === "") {
+                  onEstimatedMinutesChange("");
+
+                  return;
+                }
+
+                /*
+                  Prevents values above the
+                  allowed maximum from being entered.
+                */
+                if (Number(value) > 10080) {
+                  return;
+                }
+
                 onEstimatedMinutesChange(
-                  event.target.value
-                )
-              }
+                  value
+                );
+              }}
               placeholder="Example: 90"
             />
+
+            <small className="text-muted">
+              Maximum: 10080 minutes (7 days)
+            </small>
           </div>
 
           {/* Optional due date */}

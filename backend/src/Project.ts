@@ -2,6 +2,7 @@ import {
   DataTypes,
   Model,
 } from "sequelize";
+
 import type {
   Optional,
 } from "sequelize";
@@ -113,14 +114,6 @@ Project.init(
       updated_at
     */
     underscored: true,
-      /*
-      Enables soft delete.
-
-      Instead of physically deleting a project,
-      Sequelize will set deleted_at.
-    */
-    paranoid: true,
-    
   }
 );
 

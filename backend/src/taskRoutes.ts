@@ -3,6 +3,7 @@ import { Router } from "express";
 import {
   createTask,
   getTasks,
+  getTaskById,
   updateTask,
   deleteTask,
 } from "./taskController.js";
@@ -21,6 +22,16 @@ taskRouter.get(
   "/:projectId/tasks",
   authenticateToken,
   getTasks
+);
+
+/*
+  Loads one specific task
+  inside a specific project.
+*/
+taskRouter.get(
+  "/:projectId/tasks/:taskId",
+  authenticateToken,
+  getTaskById
 );
 
 /*
@@ -44,7 +55,7 @@ taskRouter.put(
 );
 
 /*
-  Soft deletes one existing task
+  Permanently deletes one existing task
   inside a specific project.
 */
 taskRouter.delete(
