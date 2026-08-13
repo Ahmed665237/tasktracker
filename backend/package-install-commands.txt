@@ -1,0 +1,2 @@
+npm install sequelize pg pg-hstore dotenv bcryptjs
+npm install --save-dev sequelize-cli
