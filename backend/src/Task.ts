@@ -80,22 +80,28 @@ class Task
   >
   implements TaskAttributes
 {
-  public id!: number;
+  declare id: number;
 
   /*
     Foreign key to projects.id.
   */
-  public projectId!: number;
+  declare projectId: number;
 
-  public title!: string;
-  public description!: string | null;
-  public status!: TaskStatus;
-  public priority!: TaskPriority;
-  public estimatedMinutes!: number | null;
-  public dueDate!: Date | null;
+  declare title: string;
 
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
+  declare description: string | null;
+
+  declare status: TaskStatus;
+
+  declare priority: TaskPriority;
+
+  declare estimatedMinutes: number | null;
+
+  declare dueDate: Date | null;
+
+  declare readonly createdAt: Date;
+
+  declare readonly updatedAt: Date;
 }
 
 /*
