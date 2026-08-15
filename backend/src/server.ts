@@ -9,12 +9,48 @@ import express from "express";
 import cors from "cors";
 import authRouter from "./auth.js";
 
+/*
+  Swagger UI displays the OpenAPI documentation
+  as a webpage in the browser.
+*/
+import swaggerUi from "swagger-ui-express";
+
+/*
+  YAMLJS reads the openapi.yaml file
+  and converts it into a JavaScript object
+  that Swagger UI can understand.
+*/
+import YAML from "yamljs";
+
 const app = express(); // backend application
 const port = 3000; // port on which it will run
+
+/*
+  Reads the OpenAPI documentation file.
+
+  openapi.yaml is located in the backend folder.
+*/
+const swaggerDocument =
+  YAML.load("./openapi.yaml");
 
 app.use(cors()); // this allows frontend and backend to talk to each other
 
 app.use(express.json()); // if the frontend sends JSON in the HTTP request body, read it and convert it into a JavaScript object
+
+/*
+  Swagger API documentation.
+
+  Opening:
+  http://localhost:3000/api-docs
+
+  will display the OpenAPI documentation
+  written inside openapi.yaml.
+*/
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerDocument)
+);
 
 app.use("/api/auth", authRouter); // authentication endpoints
 
