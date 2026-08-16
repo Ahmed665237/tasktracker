@@ -1,6 +1,8 @@
+import logger from "./utils/logger.js";
 import type {
   Request,
   Response,
+  NextFunction, // to make the next(), express fn
 } from "express";
 
 import {
@@ -16,7 +18,8 @@ import Project from "./Project.js";
 */
 export const createTask = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ) => {
   try {
     /*
@@ -180,6 +183,9 @@ export const createTask = async (
       newTask contains the real
       database-generated task ID.
     */
+   logger.info(
+  `Task created successfully for user ${userId}` // this message will be displayed in the terminal when a successfull log happens
+);// this is the message parameter in logger 
     return res.status(201).json({
       message:
         "Task created successfully",
@@ -188,15 +194,8 @@ export const createTask = async (
         newTask,
     });
   } catch (error) {
-    console.error(
-      "Error creating task:",
-      error
-    );
-
-    return res.status(500).json({
-      message:
-        "Unable to create task",
-    });
+    // Centralized error fn passed to middleware
+    next(error);
   }
 };
 
@@ -209,7 +208,8 @@ export const createTask = async (
 */
 export const getTasks = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ) => {
   try {
     /*
@@ -446,15 +446,8 @@ export const getTasks = async (
         tasks,
     });
   } catch (error) {
-    console.error(
-      "Error getting tasks:",
-      error
-    );
-
-    return res.status(500).json({
-      message:
-        "Unable to get tasks",
-    });
+    // Centralized error fn passed to middleware
+    next(error);
   }
 };
 
@@ -468,7 +461,8 @@ export const getTasks = async (
 */
 export const getTaskById = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ) => {
   try {
     /*
@@ -561,15 +555,8 @@ export const getTaskById = async (
         task,
     });
   } catch (error) {
-    console.error(
-      "Error getting task:",
-      error
-    );
-
-    return res.status(500).json({
-      message:
-        "Unable to get task",
-    });
+    // Centralized error fn passed to middleware
+    next(error);
   }
 };
 
@@ -579,7 +566,8 @@ export const getTaskById = async (
 */
 export const updateTask = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ) => {
   try {
     /*
@@ -773,15 +761,8 @@ export const updateTask = async (
         task,
     });
   } catch (error) {
-    console.error(
-      "Error updating task:",
-      error
-    );
-
-    return res.status(500).json({
-      message:
-        "Unable to update task",
-    });
+    // Centralized error fn passed to middleware
+    next(error);
   }
 };
 
@@ -791,7 +772,8 @@ export const updateTask = async (
 */
 export const deleteTask = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ) => {
   try {
     /*
@@ -897,14 +879,7 @@ export const deleteTask = async (
         "Task deleted successfully",
     });
   } catch (error) {
-    console.error(
-      "Error deleting task:",
-      error
-    );
-
-    return res.status(500).json({
-      message:
-        "Unable to delete task",
-    });
+    // Centralized error fn passed to middleware
+    next(error);
   }
 };

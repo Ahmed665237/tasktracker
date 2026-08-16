@@ -1,6 +1,7 @@
 import taskRouter from "./taskRoutes.js";
 import projectRouter from "./projectRoutes.js";
 import timeEntryRouter from "./timeEntryRoutes.js";
+import errorHandler from "./utils/errorHandler.js"; // the centralized error handler
 
 import "./modelRelations.js";
 import sequelize from "./database.js";
@@ -71,6 +72,28 @@ app.get("/", (req, res) => {
     message: "Backend is working",
   });
 });
+app.use("/api/auth", authRouter);
+app.use("/api/projects", projectRouter);
+app.use("/api/projects", taskRouter);
+app.use("/api/projects", timeEntryRouter);
+
+app.get("/", (req, res) => {
+  res.json({
+    message: "Backend is working",
+  });
+});
+
+
+/*
+  Centralized error handler.
+*/
+app.use(errorHandler);
+/*
+  Centralized error handler.
+
+  This must come after all normal routes as to handle all unexpected errors
+*/
+app.use(errorHandler);
 
 sequelize
   .authenticate()

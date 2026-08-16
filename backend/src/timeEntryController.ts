@@ -1,11 +1,13 @@
 import type {
   Request,
   Response,
+  NextFunction,
 } from "express";
 
 import Project from "./Project.js";
 import Task from "./Task.js";
 import TimeEntry from "./TimeEntry.js";
+import logger from "./utils/logger.js";
 
 /*
   Helper function used by the time-entry endpoints.
@@ -95,7 +97,8 @@ const isValidDate = (
 */
 export const createTimeEntry = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ) => {
   try {
     /*
@@ -237,6 +240,10 @@ export const createTimeEntry = async (
             : null,
       });
 
+    logger.info(
+      `Time entry created successfully for user ${userId}` // this is the message parameter in logger
+    );
+
     return res.status(201).json({
       message:
         "Time entry created successfully",
@@ -245,15 +252,8 @@ export const createTimeEntry = async (
         newTimeEntry,
     });
   } catch (error) {
-    console.error(
-      "Error creating time entry:",
-      error
-    );
-
-    return res.status(500).json({
-      message:
-        "Unable to create time entry",
-    });
+    // Centralized error fn passed to middleware
+    next(error);
   }
 };
 
@@ -268,7 +268,8 @@ export const createTimeEntry = async (
 */
 export const getTimeEntries = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ) => {
   try {
     const userId =
@@ -412,15 +413,8 @@ export const getTimeEntries = async (
         exceededMinutes,
     });
   } catch (error) {
-    console.error(
-      "Error getting time entries:",
-      error
-    );
-
-    return res.status(500).json({
-      message:
-        "Unable to get time entries",
-    });
+    // Centralized error fn passed to middleware
+    next(error);
   }
 };
 
@@ -429,7 +423,8 @@ export const getTimeEntries = async (
 */
 export const updateTimeEntry = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ) => {
   try {
     const userId =
@@ -574,15 +569,8 @@ export const updateTimeEntry = async (
         timeEntry,
     });
   } catch (error) {
-    console.error(
-      "Error updating time entry:",
-      error
-    );
-
-    return res.status(500).json({
-      message:
-        "Unable to update time entry",
-    });
+    // Centralized error fn passed to middleware
+    next(error);
   }
 };
 
@@ -592,7 +580,8 @@ export const updateTimeEntry = async (
 */
 export const deleteTimeEntry = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ) => {
   try {
     const userId =
@@ -668,14 +657,7 @@ export const deleteTimeEntry = async (
         "Time entry deleted successfully",
     });
   } catch (error) {
-    console.error(
-      "Error deleting time entry:",
-      error
-    );
-
-    return res.status(500).json({
-      message:
-        "Unable to delete time entry",
-    });
+    // Centralized error fn passed to middleware
+    next(error);
   }
 };
