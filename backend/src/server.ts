@@ -9,6 +9,7 @@ import sequelize from "./database.js";
 import express from "express";
 import cors from "cors";
 import authRouter from "./auth.js";
+import taskAuditRouter from "./taskAuditRoutes.js";
 
 /*
   Swagger UI displays the OpenAPI documentation
@@ -76,6 +77,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/projects", projectRouter);
 app.use("/api/projects", taskRouter);
 app.use("/api/projects", timeEntryRouter);
+app.use("/api/projects", taskAuditRouter);
 
 app.get("/", (req, res) => {
   res.json({
