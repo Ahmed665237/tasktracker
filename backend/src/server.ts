@@ -82,16 +82,11 @@ app.get("/", (req, res) => {
     message: "Backend is working",
   });
 });
-
-
-/*
-  Centralized error handler.
-*/
-app.use(errorHandler);
 /*
   Centralized error handler.
 
   This must come after all normal routes as to handle all unexpected errors
+  app.use = use error handle for incoming requests
 */
 app.use(errorHandler);
 
