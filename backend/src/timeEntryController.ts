@@ -57,6 +57,26 @@ const findOwnedTask = async (
 
   return task;
 };
+const isValidDate = (
+  dateValue: string
+) => {
+  const datePattern =
+    /^\d{4}-\d{2}-\d{2}$/;
+
+  if (!datePattern.test(dateValue)) {
+    return false;
+  }
+
+  const parsedDate =
+    new Date(`${dateValue}T00:00:00Z`);
+
+  return (
+    !Number.isNaN(parsedDate.getTime()) &&
+    parsedDate
+      .toISOString()
+      .slice(0, 10) === dateValue
+  );
+}; // this validates the date but not in the string  way  
 
 /*
   Creates a new time entry
@@ -146,7 +166,7 @@ export const createTimeEntry = async (
     if (
       durationHours === null ||
       durationHours === undefined ||
-      Number.isNaN(numericDurationHours) ||
+      !Number.isFinite(numericDurationHours) ||
       numericDurationHours <= 0
     ) {
       return res.status(400).json({
@@ -181,7 +201,7 @@ export const createTimeEntry = async (
       Date is required.
     */
     if (
-      typeof date !== "string" ||
+      typeof date !== "string" || !isValidDate(date)||
       date.trim() === ""
     ) {
       return res.status(400).json({

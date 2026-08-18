@@ -360,6 +360,29 @@ const [timeEntryHoursError, setTimeEntryHoursError] =
 const [timeEntryDateError, setTimeEntryDateError] =
   useState("");
 
+/*
+  Remembers whether the user entered
+  an invalid Date value.
+
+  This lets us distinguish:
+  - empty date -> "Date is required"
+  - invalid date -> "Invalid date"
+*/
+const [
+  timeEntryDateInvalid,
+  setTimeEntryDateInvalid,
+] = useState(false);
+
+ /*
+  Stores a general backend/API error
+  when saving a Time Entry fails.
+
+  The modal stays open so the user can
+  understand the problem and retry.
+*/
+const [timeEntrySubmitError, setTimeEntrySubmitError] =
+  useState("");
+
   /*
     Checks whether the current URL is specifically
     the Create Project URL.
@@ -581,6 +604,8 @@ const [timeEntryDateError, setTimeEntryDateError] =
     setTimeEntryNote("");
     setTimeEntryHoursError("");
     setTimeEntryDateError("");
+    setTimeEntryDateInvalid(false);
+    setTimeEntrySubmitError("");
     setShowTimeEntryModal(true);
 
     /*
@@ -632,6 +657,8 @@ const [timeEntryDateError, setTimeEntryDateError] =
 
     setTimeEntryHoursError("");
     setTimeEntryDateError("");
+    setTimeEntryDateInvalid(false);
+    setTimeEntrySubmitError("");
     setShowTimeEntryModal(true);
 
     /*
@@ -655,6 +682,8 @@ const [timeEntryDateError, setTimeEntryDateError] =
     setTimeEntryNote("");
     setTimeEntryHoursError("");
     setTimeEntryDateError("");
+    setTimeEntryDateInvalid(false);
+    setTimeEntrySubmitError("");
 
     if (viewedTask) {
       navigate(
@@ -674,6 +703,7 @@ const handleTimeEntrySubmit = async () => {
   */
   setTimeEntryHoursError("");
   setTimeEntryDateError("");
+  setTimeEntrySubmitError("");
 
   /*
     Converts the entered hours
@@ -681,25 +711,56 @@ const handleTimeEntrySubmit = async () => {
   */
   const numericHours =
     Number(timeEntryHours);
+    const maxDurationHours =
+  2147483647 / 60;
 
   /*
-    Duration is required
-    and must be greater than zero.
+  Checks if the entered number is too large
+  to be stored as a normal finite number.
+*/
+if (!Number.isFinite(numericHours)||  numericHours > maxDurationHours) {
+  setTimeEntryHoursError(
+    "Number is way too big"
+  );
+
+  return;
+}
+
+/*
+  Duration is required
+  and must be greater than zero.
+*/
+if (
+  timeEntryHours.trim() === "" ||
+  numericHours <= 0
+) {
+  setTimeEntryHoursError(
+    "Duration must be greater than zero"
+  );
+
+  return;
+}
+
+  /*
+    If the user entered something but the
+    browser says the Date is invalid,
+    show an invalid-date message.
+
+    This check must happen BEFORE the empty
+    check because an invalid date input can
+    sometimes appear to React as an empty string.
   */
-  if (
-    timeEntryHours.trim() === "" ||
-    Number.isNaN(numericHours) ||
-    numericHours <= 0
-  ) {
-    setTimeEntryHoursError(
-      "Duration must be greater than zero"
+  if (timeEntryDateInvalid) {
+    setTimeEntryDateError(
+      "Invalid date"
     );
 
     return;
   }
 
   /*
-    Date is required.
+    If nothing was entered at all,
+    show the required-field message.
   */
   if (timeEntryDate === "") {
     setTimeEntryDateError(
@@ -792,6 +853,44 @@ const handleTimeEntrySubmit = async () => {
       await response.json();
 
     if (!response.ok) {
+      /*
+        Shows each backend validation message
+        beside the field that caused the problem.
+      */
+      if (
+        data.message === "Wrong date format"
+      ) {
+        setTimeEntryDateError(
+          "Invalid date"
+        );
+      } else if (
+        data.message === "Date is required"
+      ) {
+        setTimeEntryDateError(
+          "Date is required"
+        );
+      } else if (
+        data.message === "Duration must be greater than zero" ||
+        data.message === "Duration must be at least 1 minute" ||
+        data.message === "Number is way too big"
+      ) {
+        setTimeEntryHoursError(
+          data.message
+        );
+      } else {
+        /*
+          Displays any other backend/API error
+          inside the Time Entry form.
+
+          The modal stays open because this return
+          happens before the success/close code.
+        */
+        setTimeEntrySubmitError(
+          data.message ||
+          "Unable to save time entry. Please try again."
+        );
+      }
+
       console.error(
         "Unable to save time entry:",
         data
@@ -863,6 +962,8 @@ const handleTimeEntrySubmit = async () => {
     setTimeEntryNote("");
     setTimeEntryHoursError("");
     setTimeEntryDateError("");
+    setTimeEntryDateInvalid(false);
+    setTimeEntrySubmitError("");
     setShowTimeEntryModal(false);
 
     /*
@@ -873,6 +974,14 @@ const handleTimeEntrySubmit = async () => {
       `/projects/${viewedTask.projectId}/tasks/${viewedTask.id}`
     );
   } catch (error) {
+    /*
+      Keeps the modal open and gives the user
+      a visible message if the request itself fails.
+    */
+    setTimeEntrySubmitError(
+      "Unable to save time entry. Please try again."
+    );
+
     console.error(
       "Error saving time entry:",
       error
@@ -2112,6 +2221,8 @@ useEffect(() => {
     setTimeEntryNote("");
     setTimeEntryHoursError("");
     setTimeEntryDateError("");
+    setTimeEntryDateInvalid(false);
+    setTimeEntrySubmitError("");
     setShowTimeEntryModal(true);
 
     return;
@@ -2162,6 +2273,8 @@ useEffect(() => {
 
     setTimeEntryHoursError("");
     setTimeEntryDateError("");
+    setTimeEntryDateInvalid(false);
+    setTimeEntrySubmitError("");
     setShowTimeEntryModal(true);
 
     return;
@@ -2878,26 +2991,8 @@ useEffect(() => {
             background: #ecfeff;
           }
 
-          /*
-            Styles the Delete Project button.
-          */
-          .delete-project-button {
-            min-height: 44px;
-            border:
-              1px solid #dc3545;
-            border-radius: 11px;
-            background: white;
-            color: #dc3545;
-            padding: 0 15px;
-            font-weight: 600;
-          }
-
-          .delete-project-button:hover {
-            background: #fff5f5;
-          }
 
           .edit-project-button:disabled,
-          .delete-project-button:disabled,
           .project-selector:disabled {
             cursor: not-allowed;
             opacity: 0.55;
@@ -3114,22 +3209,6 @@ useEffect(() => {
             justify-content: center;
           }
 
-          .column-add-button {
-            width: 34px;
-            height: 34px;
-            border: none;
-            border-radius: 9px;
-            background: transparent;
-            color: #475569;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-
-          .column-add-button:hover {
-            background: #e9f8f8;
-            color: #087f8c;
-          }
 
           .empty-column {
             min-height: 320px;
@@ -3786,8 +3865,7 @@ useEffect(() => {
             }
 
             .project-selector,
-            .edit-project-button,
-            .delete-project-button {
+            .edit-project-button {
               width: 100%;
             }
 
@@ -4423,6 +4501,10 @@ useEffect(() => {
             if (timeEntryHoursError) {
               setTimeEntryHoursError("");
             }
+
+            if (timeEntrySubmitError) {
+              setTimeEntrySubmitError("");
+            }
           }}
           placeholder="Example: 1.5"
         />
@@ -4441,19 +4523,58 @@ useEffect(() => {
 
         <input
           type="date"
+          min="0001-01-01"
+          max="9999-12-31"
           className={`task-form-input ${
             timeEntryDateError
               ? "task-input-error"
               : ""
           }`}
           value={timeEntryDate}
+          onInput={(event) => {
+            /*
+              Detects malformed, impossible,
+              or out-of-range Date values.
+            */
+            const dateIsInvalid =
+              event.currentTarget.validity.badInput ||
+              event.currentTarget.validity.rangeUnderflow ||
+              event.currentTarget.validity.rangeOverflow;
+
+            setTimeEntryDateInvalid(
+              dateIsInvalid
+            );
+
+            /*
+              Show the invalid-date message immediately
+              when the browser detects an invalid value.
+            */
+            if (dateIsInvalid) {
+              setTimeEntryDateError(
+                "Invalid date"
+              );
+            }
+          }}
           onChange={(event) => {
             setTimeEntryDate(
               event.target.value
             );
 
-            if (timeEntryDateError) {
+            const dateIsInvalid =
+              event.currentTarget.validity.badInput ||
+              event.currentTarget.validity.rangeUnderflow ||
+              event.currentTarget.validity.rangeOverflow;
+
+            setTimeEntryDateInvalid(
+              dateIsInvalid
+            );
+
+            if (!dateIsInvalid) {
               setTimeEntryDateError("");
+            }
+
+            if (timeEntrySubmitError) {
+              setTimeEntrySubmitError("");
             }
           }}
         />
@@ -4473,14 +4594,31 @@ useEffect(() => {
         <textarea
           className="task-form-textarea"
           value={timeEntryNote}
-          onChange={(event) =>
+          onChange={(event) => {
             setTimeEntryNote(
               event.target.value
-            )
-          }
+            );
+
+            if (timeEntrySubmitError) {
+              setTimeEntrySubmitError("");
+            }
+          }}
           placeholder="Optional note"
         />
       </div>
+
+      {/*
+        Shows backend/API save errors that are
+        not tied to one specific input field.
+
+        The modal stays open so the user can
+        correct the problem and retry.
+      */}
+      {timeEntrySubmitError && (
+        <p className="task-field-error">
+          {timeEntrySubmitError}
+        </p>
+      )}
 
       <div className="task-modal-actions">
         <button
