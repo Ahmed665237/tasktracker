@@ -14,6 +14,18 @@ Each user can only access their own projects, tasks, and related data.
 
 ---
 
+# Prerequisites
+
+Before running the project locally, make sure you have:
+
+- Node.js
+- npm
+- PostgreSQL
+
+You will also need to create the PostgreSQL database before running the migrations.
+
+---
+
 # Frontend
 
 The frontend provides the user interface for TaskTracker.
@@ -69,10 +81,64 @@ The frontend currently supports:
 - URL-based Edit Time Entry modal
 - Form validation messages
 
-## Insalling the Frontend
-## Running the Frontend
+---
 
-Open a terminal and go to the frontend folder:
+# Database Setup
+
+The backend uses PostgreSQL.
+
+Before running the backend for the first time, create the database.
+
+Open PostgreSQL and create the TaskTracker database:
+
+```sql
+CREATE DATABASE tasktracker;
+```
+
+After creating the database, make sure the backend environment variables contain the correct PostgreSQL connection information and JWT secret.
+
+Then run the database migrations from the backend folder:
+
+```bash
+cd backend
+npx sequelize-cli db:migrate
+```
+
+The migrations create the required database tables.
+
+To undo the latest migration:
+
+```bash
+npx sequelize-cli db:migrate:undo
+```
+
+---
+
+# Backend
+
+## Installing and Running the Backend
+
+Open a terminal and go to the backend folder:
+
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+The backend runs on:
+
+```text
+http://localhost:3000
+```
+
+---
+
+# Frontend Setup
+
+## Installing and Running the Frontend
+
+Open another terminal and go to the frontend folder:
 
 ```bash
 cd frontend
@@ -80,12 +146,83 @@ npm install
 npm run dev
 ```
 
-## Installing the Backend
-## Running the Backend
+Vite will show the frontend URL in the terminal after it starts.
 
-Open another terminal and go to the backend folder:
+---
+
+# API
+
+The frontend communicates with the backend through a REST API.
+
+The API includes endpoints for:
+
+- Authentication
+- Projects
+- Tasks
+- Time Entries
+
+Protected endpoints require the JWT token returned after login.
+
+The token is sent using Bearer authentication.
+
+Example:
+
+```text
+Authorization: Bearer <token>
+```
+
+---
+
+# API Documentation
+
+The API documentation can be accessed through the `/api-docs` endpoint.
+
+After starting the backend, open:
+
+```text
+http://localhost:3000/api-docs
+```
+
+The API documentation shows the available endpoints, request data, authentication requirements, and response information.
+
+---
+
+# Running the Project From the Start
+
+If the project is cloned on a new machine, the basic order is:
+
+```bash
+git clone <repository-url>
+cd tasktracker
+```
+
+Create the PostgreSQL database first:
+
+```sql
+CREATE DATABASE tasktracker;
+```
+
+Then install the backend dependencies and run the migrations:
 
 ```bash
 cd backend
 npm install
+npx sequelize-cli db:migrate
 npm run dev
+```
+
+Open another terminal and start the frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+After both applications are running, open the frontend URL shown by Vite.
+
+The backend API documentation is available at:
+
+```text
+http://localhost:3000/api-docs
+```
