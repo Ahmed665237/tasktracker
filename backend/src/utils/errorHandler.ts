@@ -18,13 +18,24 @@ const errorHandler = (
   response: Response,
   next: NextFunction
 ) => {
-  /*
-    Prints the real error in the backend terminal
-    so it can be debugged it.
-  */
-  logger.error(
+/*
+  Prints the real error in the backend terminal
+  so it can be debugged it.
+
+  Winston also stores the error stack
+  inside the configured log files.
+*/
+logger.error(
   "Unexpected server error",
-  error
+  {
+    stack: error.stack,
+  }
+); // to make all logs follow one consistant format then print the type of error
+logger.error(
+  "Unexpected server error",
+  {
+    stack: error.stack,
+  }
 ); // to make all logs follow one consistant format then print the type of error
 
   /*
