@@ -859,12 +859,15 @@ const [timeEntrySubmitError, setTimeEntrySubmitError] =
     setShowTimeEntryModal(true);
 
     /*
-      Example:
-      /projects/1/tasks/4/time-entries/new
+      Keep the current task-details URL.
+
+      Changing to a separate Time Entry route caused
+      Home/ProjectDashboard to be rebuilt and the user
+      could be returned to /home.
+
+      The modal is already controlled by React state,
+      so a route change is not needed here.
     */
-    navigate(
-      `/projects/${viewedTask.projectId}/tasks/${viewedTask.id}/time-entries/new`
-    );
   };
 
   /*
@@ -912,12 +915,11 @@ const [timeEntrySubmitError, setTimeEntrySubmitError] =
     setShowTimeEntryModal(true);
 
     /*
-      Example:
-      /projects/1/tasks/4/time-entries/3/edit
+      Keep the current task-details URL.
+
+      The Time Entry modal is controlled by React state,
+      so editing does not need a separate route change.
     */
-    navigate(
-      `/projects/${viewedTask.projectId}/tasks/${viewedTask.id}/time-entries/${timeEntry.id}/edit`
-    );
   };
 
   /*
@@ -935,11 +937,10 @@ const [timeEntrySubmitError, setTimeEntrySubmitError] =
     setTimeEntryDateInvalid(false);
     setTimeEntrySubmitError("");
 
-    if (viewedTask) {
-      navigate(
-        `/projects/${viewedTask.projectId}/tasks/${viewedTask.id}`
-      );
-    }
+    /*
+      No navigation is needed here because opening
+      the Time Entry modal no longer changes the URL.
+    */
   };
   /*
   Creates a new time entry or updates
@@ -1225,12 +1226,11 @@ if (
     setShowTimeEntryModal(false);
 
     /*
-      Returns the browser URL to
-      the normal task-details route.
+      Stay on the current task-details page.
+
+      The modal is already closed above, so no route
+      change is needed after a successful save.
     */
-    navigate(
-      `/projects/${viewedTask.projectId}/tasks/${viewedTask.id}`
-    );
   } catch (error) {
     /*
       Keeps the modal open and gives the user
