@@ -13,7 +13,7 @@
     //"types": [], // as this can make the NOde globals unrecognized
     // For nodejs:
     // "lib": ["esnext"],
-    // "types": ["node"],
+     "types": ["node","jest"],
     // and npm install -D @types/node
 
     // Other Outputs
