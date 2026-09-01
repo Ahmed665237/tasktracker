@@ -64,6 +64,19 @@ interface Task {
   createdAt: string;
   updatedAt: string;
 }
+/*
+  This describes one time entry returned
+  by the backend.
+*/
+interface TimeEntry {
+  id: number;
+  taskId: number;
+  durationMinutes: number;
+  date: string;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
 function ProjectDashboard({
   currentUserName,
@@ -267,7 +280,108 @@ function ProjectDashboard({
 
     projectId will contain "123".
   */
-  const { projectId, taskId } = useParams();
+  const {
+    projectId,
+    taskId,
+    timeEntryId,
+  } = useParams();
+  /*
+  Stores all time entries belonging
+  to the task currently being viewed.
+*/
+const [timeEntries, setTimeEntries] =
+  useState<TimeEntry[]>([]);
+
+/*
+  Stores the total amount of time
+  logged for the viewed task.
+*/
+const [totalLoggedMinutes, setTotalLoggedMinutes] =
+  useState(0);
+
+/*
+  Stores how much estimated time
+  is still remaining.
+*/
+const [remainingMinutes, setRemainingMinutes] =
+  useState<number | null>(null);
+
+/*
+  Stores how much logged time
+  exceeded the estimate.
+*/
+const [exceededMinutes, setExceededMinutes] =
+  useState<number | null>(null);
+
+
+  /*
+  Controls whether the Add/Edit Time Entry
+  modal is visible.
+*/
+const [showTimeEntryModal, setShowTimeEntryModal] =
+  useState(false);
+
+/*
+  Stores the time entry currently being edited.
+
+  null means we are creating a new time entry.
+*/
+const [editingTimeEntryId, setEditingTimeEntryId] =
+  useState<number | null>(null);
+
+/*
+  Stores duration in hours while
+  the user is typing in the form.
+*/
+const [timeEntryHours, setTimeEntryHours] =
+  useState("");
+
+/*
+  Stores the required date.
+*/
+const [timeEntryDate, setTimeEntryDate] =
+  useState("");
+
+/*
+  Stores the optional note.
+*/
+const [timeEntryNote, setTimeEntryNote] =
+  useState("");
+
+/*
+  Stores validation errors for duration.
+*/
+const [timeEntryHoursError, setTimeEntryHoursError] =
+  useState("");
+
+/*
+  Stores validation errors for date.
+*/
+const [timeEntryDateError, setTimeEntryDateError] =
+  useState("");
+
+/*
+  Remembers whether the user entered
+  an invalid Date value.
+
+  This lets us distinguish:
+  - empty date -> "Date is required"
+  - invalid date -> "Invalid date"
+*/
+const [
+  timeEntryDateInvalid,
+  setTimeEntryDateInvalid,
+] = useState(false);
+
+ /*
+  Stores a general backend/API error
+  when saving a Time Entry fails.
+
+  The modal stays open so the user can
+  understand the problem and retry.
+*/
+const [timeEntrySubmitError, setTimeEntrySubmitError] =
+  useState("");
 
   /*
     Checks whether the current URL is specifically
@@ -300,15 +414,54 @@ function ProjectDashboard({
     location.pathname.includes("/tasks/new");
 
   /*
+    Checks whether the current URL is for
+    adding a new Time Entry.
+
+    Example:
+    /projects/5/tasks/10/time-entries/new
+  */
+  const isCreateTimeEntryRoute =
+    location.pathname.includes(
+      "/time-entries/new"
+    );
+
+  /*
+    Checks whether the current URL is for
+    editing an existing Time Entry.
+
+    Example:
+    /projects/5/tasks/10/time-entries/3/edit
+  */
+  const isEditTimeEntryRoute =
+    location.pathname.includes(
+      "/time-entries/"
+    ) &&
+    location.pathname.endsWith("/edit");
+
+  /*
+    True when either Time Entry route
+    is currently open.
+  */
+  const isTimeEntryRoute =
+    isCreateTimeEntryRoute ||
+    isEditTimeEntryRoute;
+
+  /*
     Checks whether the current URL is the
     Edit Task URL.
+
+    Time Entry edit URLs are excluded so
+    they are not mistaken for task-edit URLs.
 
     Example:
     /projects/5/tasks/10/edit
   */
   const isEditTaskRoute =
     location.pathname.includes("/tasks/") &&
-    location.pathname.endsWith("/edit");
+    location.pathname.endsWith("/edit") &&
+    !location.pathname.includes(
+      "/time-entries/"
+    );
 
   /*
     Checks whether the current URL is the
@@ -317,12 +470,16 @@ function ProjectDashboard({
     Example:
     /projects/5/tasks/10
 
-    The checks exclude Create Task and Edit Task URLs.
+    Create Task, Edit Task, and Time Entry
+    URLs are excluded.
   */
   const isViewTaskRoute =
     location.pathname.includes("/tasks/") &&
     !location.pathname.endsWith("/edit") &&
-    !location.pathname.includes("/tasks/new");
+    !location.pathname.includes("/tasks/new") &&
+    !location.pathname.includes(
+      "/time-entries/"
+    );
 
   /*
     Finds the complete selected project object.
@@ -428,6 +585,527 @@ function ProjectDashboard({
       `/projects/${viewedTask.projectId}/tasks/${viewedTask.id}/edit`
     );
   };
+
+  /*
+    Opens the Time Entry modal
+    in create mode.
+
+    The browser URL also changes so
+    the modal has its own frontend route.
+  */
+  const openCreateTimeEntryModal = () => {
+    if (!viewedTask) {
+      return;
+    }
+
+    setEditingTimeEntryId(null);
+    setTimeEntryHours("");
+    setTimeEntryDate("");
+    setTimeEntryNote("");
+    setTimeEntryHoursError("");
+    setTimeEntryDateError("");
+    setTimeEntryDateInvalid(false);
+    setTimeEntrySubmitError("");
+    setShowTimeEntryModal(true);
+
+    /*
+      Example:
+      /projects/1/tasks/4/time-entries/new
+    */
+    navigate(
+      `/projects/${viewedTask.projectId}/tasks/${viewedTask.id}/time-entries/new`
+    );
+  };
+
+  /*
+    Opens one existing Time Entry
+    in edit mode.
+  */
+  const openEditTimeEntryModal = (
+    timeEntry: TimeEntry
+  ) => {
+    if (!viewedTask) {
+      return;
+    }
+
+    /*
+      Saves which Time Entry is being edited.
+    */
+    setEditingTimeEntryId(
+      timeEntry.id
+    );
+
+    /*
+      The backend stores duration in minutes.
+
+      The form displays hours,
+      so minutes are converted back to hours.
+    */
+    setTimeEntryHours(
+      String(
+        timeEntry.durationMinutes / 60
+      )
+    );
+
+    setTimeEntryDate(
+      timeEntry.date
+    );
+
+    setTimeEntryNote(
+      timeEntry.note ?? ""
+    );
+
+    setTimeEntryHoursError("");
+    setTimeEntryDateError("");
+    setTimeEntryDateInvalid(false);
+    setTimeEntrySubmitError("");
+    setShowTimeEntryModal(true);
+
+    /*
+      Example:
+      /projects/1/tasks/4/time-entries/3/edit
+    */
+    navigate(
+      `/projects/${viewedTask.projectId}/tasks/${viewedTask.id}/time-entries/${timeEntry.id}/edit`
+    );
+  };
+
+  /*
+    Closes the Time Entry modal and
+    returns to the task-details URL.
+  */
+  const closeTimeEntryModal = () => {
+    setShowTimeEntryModal(false);
+    setEditingTimeEntryId(null);
+    setTimeEntryHours("");
+    setTimeEntryDate("");
+    setTimeEntryNote("");
+    setTimeEntryHoursError("");
+    setTimeEntryDateError("");
+    setTimeEntryDateInvalid(false);
+    setTimeEntrySubmitError("");
+
+    if (viewedTask) {
+      navigate(
+        `/projects/${viewedTask.projectId}/tasks/${viewedTask.id}`
+      );
+    }
+  };
+  /*
+  Creates a new time entry or updates
+  an existing time entry.
+
+  The actual save happens in the backend.
+*/
+const handleTimeEntrySubmit = async () => {
+  /*
+    Clears old validation errors.
+  */
+  setTimeEntryHoursError("");
+  setTimeEntryDateError("");
+  setTimeEntrySubmitError("");
+
+  /*
+    Converts the entered hours
+    from text into a number.
+  */
+  const numericHours =
+    Number(timeEntryHours);
+    const maxDurationHours =
+  2147483647 / 60;
+
+  /*
+  Checks if the entered number is too large
+  to be stored as a normal finite number.
+*/
+if (!Number.isFinite(numericHours)||  numericHours > maxDurationHours) {
+  setTimeEntryHoursError(
+    "Number is way too big"
+  );
+
+  return;
+}
+
+/*
+  Duration is required
+  and must be greater than zero.
+*/
+if (
+  timeEntryHours.trim() === "" ||
+  numericHours <= 0
+) {
+  setTimeEntryHoursError(
+    "Duration must be greater than zero"
+  );
+
+  return;
+}
+
+  /*
+    If the user entered something but the
+    browser says the Date is invalid,
+    show an invalid-date message.
+
+    This check must happen BEFORE the empty
+    check because an invalid date input can
+    sometimes appear to React as an empty string.
+  */
+  if (timeEntryDateInvalid) {
+    setTimeEntryDateError(
+      "Invalid date"
+    );
+
+    return;
+  }
+
+  /*
+    If nothing was entered at all,
+    show the required-field message.
+  */
+  if (timeEntryDate === "") {
+    setTimeEntryDateError(
+      "Date is required"
+    );
+
+    return;
+  }
+
+  /*
+    A time entry cannot exist
+    without a task being viewed.
+  */
+  if (!viewedTask) {
+    return;
+  }
+
+  /*
+    Gets the JWT token saved
+    when the user logged in.
+  */
+  const token =
+    localStorage.getItem("token");
+
+  if (!token) {
+    console.error(
+      "Authentication token is missing"
+    );
+
+    return;
+  }
+
+  try {
+    /*
+      CREATE:
+
+      POST
+      /time-entries
+
+      EDIT:
+
+      PUT
+      /time-entries/:timeEntryId
+    */
+    const url =
+      editingTimeEntryId === null
+        ? `http://localhost:3000/api/projects/${viewedTask.projectId}/tasks/${viewedTask.id}/time-entries`
+        : `http://localhost:3000/api/projects/${viewedTask.projectId}/tasks/${viewedTask.id}/time-entries/${editingTimeEntryId}`;
+
+    const method =
+      editingTimeEntryId === null
+        ? "POST"
+        : "PUT";
+
+    /*
+      Sends the time entry to the backend.
+
+      The frontend sends hours.
+
+      The backend converts hours
+      into minutes before saving.
+    */
+    const response = await fetch(
+      url,
+      {
+        method: method,
+
+        headers: {
+          "Content-Type":
+            "application/json",
+
+          Authorization:
+            `Bearer ${token}`,
+        },
+
+        body: JSON.stringify({
+          durationHours:
+            numericHours,
+
+          date:
+            timeEntryDate,
+
+          note:
+            timeEntryNote.trim(),
+        }),
+      }
+    );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      /*
+        Shows each backend validation message
+        beside the field that caused the problem.
+      */
+      if (
+        data.message === "Wrong date format"
+      ) {
+        setTimeEntryDateError(
+          "Invalid date"
+        );
+      } else if (
+        data.message === "Date is required"
+      ) {
+        setTimeEntryDateError(
+          "Date is required"
+        );
+      } else if (
+        data.message === "Duration must be greater than zero" ||
+        data.message === "Duration must be at least 1 minute" ||
+        data.message === "Number is way too big"
+      ) {
+        setTimeEntryHoursError(
+          data.message
+        );
+      } else {
+        /*
+          Displays any other backend/API error
+          inside the Time Entry form.
+
+          The modal stays open because this return
+          happens before the success/close code.
+        */
+        setTimeEntrySubmitError(
+          data.message ||
+          "Unable to save time entry. Please try again."
+        );
+      }
+
+      console.error(
+        "Unable to save time entry:",
+        data
+      );
+
+      return;
+    }
+
+    /*
+      After saving, asks the backend
+      for the complete updated time-entry data.
+
+      This also gives us the new:
+      - total logged time
+      - remaining time
+      - exceeded time
+    */
+    const timeEntriesResponse =
+      await fetch(
+        `http://localhost:3000/api/projects/${viewedTask.projectId}/tasks/${viewedTask.id}/time-entries`,
+        {
+          method: "GET",
+
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
+
+    const timeEntriesData =
+      await timeEntriesResponse.json();
+
+    if (!timeEntriesResponse.ok) {
+      console.error(
+        "Unable to reload time entries:",
+        timeEntriesData
+      );
+
+      return;
+    }
+
+    /*
+      React mirrors the updated data
+      returned by the backend.
+    */
+    setTimeEntries(
+      timeEntriesData.timeEntries
+    );
+
+    setTotalLoggedMinutes(
+      timeEntriesData.totalLoggedMinutes
+    );
+
+    setRemainingMinutes(
+      timeEntriesData.remainingMinutes
+    );
+
+    setExceededMinutes(
+      timeEntriesData.exceededMinutes
+    );
+
+    /*
+      Clears and closes the Time Entry modal.
+    */
+    setEditingTimeEntryId(null);
+    setTimeEntryHours("");
+    setTimeEntryDate("");
+    setTimeEntryNote("");
+    setTimeEntryHoursError("");
+    setTimeEntryDateError("");
+    setTimeEntryDateInvalid(false);
+    setTimeEntrySubmitError("");
+    setShowTimeEntryModal(false);
+
+    /*
+      Returns the browser URL to
+      the normal task-details route.
+    */
+    navigate(
+      `/projects/${viewedTask.projectId}/tasks/${viewedTask.id}`
+    );
+  } catch (error) {
+    /*
+      Keeps the modal open and gives the user
+      a visible message if the request itself fails.
+    */
+    setTimeEntrySubmitError(
+      "Unable to save time entry. Please try again."
+    );
+
+    console.error(
+      "Error saving time entry:",
+      error
+    );
+  }
+};
+
+/*
+  Permanently deletes one Time Entry
+  through the backend.
+*/
+const handleDeleteTimeEntry = async (
+  timeEntry: TimeEntry
+) => {
+  if (!viewedTask) {
+    return;
+  }
+
+  /*
+    Asks before permanently deleting it.
+  */
+  const confirmed =
+    window.confirm(
+      "Are you sure you want to delete this time entry?"
+    );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const token =
+    localStorage.getItem("token");
+
+  if (!token) {
+    console.error(
+      "Authentication token is missing"
+    );
+
+    return;
+  }
+
+  try {
+    /*
+      Calls the REST DELETE endpoint.
+
+      DELETE
+      /api/projects/:projectId/tasks/:taskId/time-entries/:timeEntryId
+    */
+    const response = await fetch(
+      `http://localhost:3000/api/projects/${viewedTask.projectId}/tasks/${viewedTask.id}/time-entries/${timeEntry.id}`,
+      {
+        method: "DELETE",
+
+        headers: {
+          Authorization:
+            `Bearer ${token}`,
+        },
+      }
+    );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      console.error(
+        "Unable to delete time entry:",
+        data
+      );
+
+      return;
+    }
+
+    /*
+      Reloads Time Entries from the backend
+      after deletion so the backend-calculated
+      totals are also refreshed.
+    */
+    const timeEntriesResponse =
+      await fetch(
+        `http://localhost:3000/api/projects/${viewedTask.projectId}/tasks/${viewedTask.id}/time-entries`,
+        {
+          method: "GET",
+
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
+
+    const timeEntriesData =
+      await timeEntriesResponse.json();
+
+    if (!timeEntriesResponse.ok) {
+      console.error(
+        "Unable to reload time entries:",
+        timeEntriesData
+      );
+
+      return;
+    }
+
+    setTimeEntries(
+      timeEntriesData.timeEntries
+    );
+
+    setTotalLoggedMinutes(
+      timeEntriesData.totalLoggedMinutes
+    );
+
+    setRemainingMinutes(
+      timeEntriesData.remainingMinutes
+    );
+
+    setExceededMinutes(
+      timeEntriesData.exceededMinutes
+    );
+  } catch (error) {
+    console.error(
+      "Error deleting time entry:",
+      error
+    );
+  }
+};
 
   /*
     Closes the task modal and returns
@@ -1395,6 +2073,231 @@ const handleDeleteTask = async () => {
 
 
   /*
+  Automatically clears Time Entry
+  validation messages after 2 seconds.
+*/
+useEffect(() => {
+  if (
+    timeEntryHoursError === "" &&
+    timeEntryDateError === ""
+  ) {
+    return;
+  }
+
+  const errorTimer =
+    window.setTimeout(() => {
+      setTimeEntryHoursError("");
+      setTimeEntryDateError("");
+    }, 2000);
+
+  return () => {
+    window.clearTimeout(errorTimer);
+  };
+}, [
+  timeEntryHoursError,
+  timeEntryDateError,
+]);
+
+
+  /*
+  Loads all time entries for the task
+  currently being viewed.
+
+  It also receives:
+  - total logged time
+  - remaining estimated time
+  - exceeded estimated time
+*/
+useEffect(() => {
+  /*
+    If no task is currently being viewed,
+    clear the old time-entry information.
+  */
+  if (!viewedTask) {
+    setTimeEntries([]);
+    setTotalLoggedMinutes(0);
+    setRemainingMinutes(null);
+    setExceededMinutes(null);
+
+    return;
+  }
+
+  /*
+    Gets the JWT token saved
+    when the user logged in.
+  */
+  const token =
+    localStorage.getItem("token");
+
+  if (!token) {
+    console.error(
+      "Authentication token is missing"
+    );
+
+    return;
+  }
+
+  /*
+    Loads this task's time entries
+    from the backend.
+  */
+  const loadTimeEntries = async () => {
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/projects/${viewedTask.projectId}/tasks/${viewedTask.id}/time-entries`,
+        {
+          method: "GET",
+
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        console.error(
+          "Unable to load time entries:",
+          data
+        );
+
+        return;
+      }
+
+      /*
+        React only mirrors the values
+        calculated and returned by the backend.
+      */
+      setTimeEntries(
+        data.timeEntries
+      );
+
+      setTotalLoggedMinutes(
+        data.totalLoggedMinutes
+      );
+
+      setRemainingMinutes(
+        data.remainingMinutes
+      );
+
+      setExceededMinutes(
+        data.exceededMinutes
+      );
+    } catch (error) {
+      console.error(
+        "Error loading time entries:",
+        error
+      );
+    }
+  };
+
+  loadTimeEntries();
+}, [
+  viewedTask,
+]);
+
+/*
+  Keeps the Time Entry modal synchronized
+  with the browser URL.
+
+  This also means refreshing a Time Entry
+  URL can reopen the correct modal.
+*/
+useEffect(() => {
+  /*
+    Add Time Entry route:
+    /projects/:projectId/tasks/:taskId/time-entries/new
+  */
+  if (
+    isCreateTimeEntryRoute &&
+    viewedTask
+  ) {
+    setEditingTimeEntryId(null);
+    setTimeEntryHours("");
+    setTimeEntryDate("");
+    setTimeEntryNote("");
+    setTimeEntryHoursError("");
+    setTimeEntryDateError("");
+    setTimeEntryDateInvalid(false);
+    setTimeEntrySubmitError("");
+    setShowTimeEntryModal(true);
+
+    return;
+  }
+
+  /*
+    Edit Time Entry route:
+    /projects/:projectId/tasks/:taskId/time-entries/:timeEntryId/edit
+  */
+  if (
+    isEditTimeEntryRoute &&
+    viewedTask &&
+    timeEntryId
+  ) {
+    const numericTimeEntryId =
+      Number(timeEntryId);
+
+    const timeEntryToEdit =
+      timeEntries.find(
+        (timeEntry) =>
+          timeEntry.id === numericTimeEntryId
+      );
+
+    /*
+      Wait until the Time Entry list has loaded.
+    */
+    if (!timeEntryToEdit) {
+      return;
+    }
+
+    setEditingTimeEntryId(
+      timeEntryToEdit.id
+    );
+
+    setTimeEntryHours(
+      String(
+        timeEntryToEdit.durationMinutes / 60
+      )
+    );
+
+    setTimeEntryDate(
+      timeEntryToEdit.date
+    );
+
+    setTimeEntryNote(
+      timeEntryToEdit.note ?? ""
+    );
+
+    setTimeEntryHoursError("");
+    setTimeEntryDateError("");
+    setTimeEntryDateInvalid(false);
+    setTimeEntrySubmitError("");
+    setShowTimeEntryModal(true);
+
+    return;
+  }
+
+  /*
+    A normal task URL does not show
+    the Time Entry modal.
+  */
+  if (!isTimeEntryRoute) {
+    setShowTimeEntryModal(false);
+  }
+}, [
+  isCreateTimeEntryRoute,
+  isEditTimeEntryRoute,
+  isTimeEntryRoute,
+  viewedTask,
+  timeEntryId,
+  timeEntries,
+]);
+
+
+  /*
     Loads all projects belonging to
     the logged-in user from the backend.
   */
@@ -1732,7 +2635,11 @@ const handleDeleteTask = async () => {
       /projects/:projectId/tasks/:taskId/edit
     */
     if (
-      (isViewTaskRoute || isEditTaskRoute) &&
+      (
+        isViewTaskRoute ||
+        isEditTaskRoute ||
+        isTimeEntryRoute
+      ) &&
       projectId &&
       taskId
     ) {
@@ -1853,7 +2760,10 @@ const handleDeleteTask = async () => {
             /*
               Read-only task view.
             */
-            if (isViewTaskRoute) {
+            if (
+              isViewTaskRoute ||
+              isTimeEntryRoute
+            ) {
               setViewingTaskId(
                 loadedTask.id
               );
@@ -1917,6 +2827,7 @@ const handleDeleteTask = async () => {
     isCreateTaskRoute,
     isViewTaskRoute,
     isEditTaskRoute,
+    isTimeEntryRoute,
     projectId,
     taskId,
     navigate,
@@ -2080,26 +2991,8 @@ const handleDeleteTask = async () => {
             background: #ecfeff;
           }
 
-          /*
-            Styles the Delete Project button.
-          */
-          .delete-project-button {
-            min-height: 44px;
-            border:
-              1px solid #dc3545;
-            border-radius: 11px;
-            background: white;
-            color: #dc3545;
-            padding: 0 15px;
-            font-weight: 600;
-          }
-
-          .delete-project-button:hover {
-            background: #fff5f5;
-          }
 
           .edit-project-button:disabled,
-          .delete-project-button:disabled,
           .project-selector:disabled {
             cursor: not-allowed;
             opacity: 0.55;
@@ -2316,22 +3209,6 @@ const handleDeleteTask = async () => {
             justify-content: center;
           }
 
-          .column-add-button {
-            width: 34px;
-            height: 34px;
-            border: none;
-            border-radius: 9px;
-            background: transparent;
-            color: #475569;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-
-          .column-add-button:hover {
-            background: #e9f8f8;
-            color: #087f8c;
-          }
 
           .empty-column {
             min-height: 320px;
@@ -2646,6 +3523,175 @@ const handleDeleteTask = async () => {
             font-weight: 650;
           }
 
+
+          .time-entry-section {
+            border-top: 1px solid #e2e8f0;
+            padding-top: 22px;
+            margin-top: 10px;
+            margin-bottom: 24px;
+          }
+
+          .time-entry-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+            margin-bottom: 18px;
+          }
+
+          .time-entry-title {
+            margin: 0 0 8px;
+            font-size: 20px;
+            font-weight: 700;
+            color: #0f172a;
+          }
+
+          .time-entry-total,
+          .time-entry-remaining,
+          .time-entry-exceeded {
+            margin: 4px 0;
+            font-size: 14px;
+          }
+
+          .time-entry-total {
+            color: #0f172a;
+            font-weight: 650;
+          }
+
+          .time-entry-remaining {
+            color: #087f8c;
+          }
+
+          .time-entry-exceeded {
+            color: #dc3545;
+          }
+
+          .add-time-entry-button {
+            min-height: 42px;
+            border: none;
+            border-radius: 11px;
+            padding: 0 16px;
+            background:
+              linear-gradient(
+                135deg,
+                #0f9b9b,
+                #087f8c
+              );
+            color: white;
+            font-weight: 650;
+          }
+
+          .add-time-entry-button:hover {
+            background:
+              linear-gradient(
+                135deg,
+                #0d8b8b,
+                #066f7a
+              );
+          }
+
+          .time-entry-empty {
+            border: 2px dashed #d8e1ea;
+            border-radius: 13px;
+            padding: 28px;
+            text-align: center;
+            color: #64748b;
+          }
+
+          .time-entry-empty-title {
+            margin: 0 0 5px;
+            color: #334155;
+            font-weight: 700;
+          }
+
+          .time-entry-empty-text {
+            margin: 0;
+            font-size: 14px;
+          }
+
+          .time-entry-table-wrapper {
+            overflow-x: auto;
+          }
+
+          .time-entry-table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+
+          .time-entry-table th,
+          .time-entry-table td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: left;
+            font-size: 14px;
+          }
+
+          .time-entry-table th {
+            color: #475569;
+            font-weight: 700;
+          }
+
+          .time-entry-edit-button,
+          .time-entry-delete-button {
+            border: none;
+            background: transparent;
+            padding: 4px 8px;
+            font-weight: 600;
+          }
+
+          .time-entry-edit-button {
+            color: #087f8c;
+          }
+
+          .time-entry-delete-button {
+            color: #dc3545;
+          }
+
+                    /*
+            Styles the Add/Edit Time Entry modal.
+          */
+          .time-entry-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 120;
+            background:
+              rgba(15, 23, 42, 0.58);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 22px;
+          }
+
+          .time-entry-modal {
+            width: 100%;
+            max-width: 520px;
+            background: white;
+            border-radius: 20px;
+            box-shadow:
+              0 30px 80px
+              rgba(15, 23, 42, 0.28);
+            padding: 28px;
+          }
+
+          .time-entry-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+            margin-bottom: 24px;
+          }
+
+          .time-entry-modal-title {
+            margin: 0 0 6px;
+            font-size: 24px;
+            font-weight: 700;
+          }
+
+          .time-entry-modal-subtitle {
+            margin: 0;
+            color: #64748b;
+          }
+
           /*
             TaskModal uses these classes.
           */
@@ -2819,8 +3865,7 @@ const handleDeleteTask = async () => {
             }
 
             .project-selector,
-            .edit-project-button,
-            .delete-project-button {
+            .edit-project-button {
               width: 100%;
             }
 
@@ -3401,6 +4446,319 @@ const handleDeleteTask = async () => {
                 </span>
               )}
             </div>
+
+
+            {/*
+  Displays the Add/Edit Time Entry modal
+  above the task-details popup.
+*/}
+{showTimeEntryModal && viewedTask && (
+  <div className="time-entry-modal-backdrop">
+    <div className="time-entry-modal">
+      <div className="time-entry-modal-header">
+        <div>
+          <h3 className="time-entry-modal-title">
+            {editingTimeEntryId !== null
+              ? "Edit Time Entry"
+              : "Add Time Entry"}
+          </h3>
+
+          <p className="time-entry-modal-subtitle">
+            Log the time spent on this task.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="task-modal-close"
+          onClick={closeTimeEntryModal}
+          aria-label="Close time entry modal"
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="task-form-group">
+        <label className="task-form-label">
+          Duration (hours)
+        </label>
+
+        <input
+          type="number"
+          step="0.1"
+          min="0"
+          className={`task-form-input ${
+            timeEntryHoursError
+              ? "task-input-error"
+              : ""
+          }`}
+          value={timeEntryHours}
+          onChange={(event) => {
+            setTimeEntryHours(
+              event.target.value
+            );
+
+            if (timeEntryHoursError) {
+              setTimeEntryHoursError("");
+            }
+
+            if (timeEntrySubmitError) {
+              setTimeEntrySubmitError("");
+            }
+          }}
+          placeholder="Example: 1.5"
+        />
+
+        {timeEntryHoursError && (
+          <p className="task-field-error">
+            {timeEntryHoursError}
+          </p>
+        )}
+      </div>
+
+      <div className="task-form-group">
+        <label className="task-form-label">
+          Date
+        </label>
+
+        <input
+          type="date"
+          min="0001-01-01"
+          max="9999-12-31"
+          className={`task-form-input ${
+            timeEntryDateError
+              ? "task-input-error"
+              : ""
+          }`}
+          value={timeEntryDate}
+          onInput={(event) => {
+            /*
+              Detects malformed, impossible,
+              or out-of-range Date values.
+            */
+            const dateIsInvalid =
+              event.currentTarget.validity.badInput ||
+              event.currentTarget.validity.rangeUnderflow ||
+              event.currentTarget.validity.rangeOverflow;
+
+            setTimeEntryDateInvalid(
+              dateIsInvalid
+            );
+
+            /*
+              Show the invalid-date message immediately
+              when the browser detects an invalid value.
+            */
+            if (dateIsInvalid) {
+              setTimeEntryDateError(
+                "Invalid date"
+              );
+            }
+          }}
+          onChange={(event) => {
+            setTimeEntryDate(
+              event.target.value
+            );
+
+            const dateIsInvalid =
+              event.currentTarget.validity.badInput ||
+              event.currentTarget.validity.rangeUnderflow ||
+              event.currentTarget.validity.rangeOverflow;
+
+            setTimeEntryDateInvalid(
+              dateIsInvalid
+            );
+
+            if (!dateIsInvalid) {
+              setTimeEntryDateError("");
+            }
+
+            if (timeEntrySubmitError) {
+              setTimeEntrySubmitError("");
+            }
+          }}
+        />
+
+        {timeEntryDateError && (
+          <p className="task-field-error">
+            {timeEntryDateError}
+          </p>
+        )}
+      </div>
+
+      <div className="task-form-group">
+        <label className="task-form-label">
+          Note
+        </label>
+
+        <textarea
+          className="task-form-textarea"
+          value={timeEntryNote}
+          onChange={(event) => {
+            setTimeEntryNote(
+              event.target.value
+            );
+
+            if (timeEntrySubmitError) {
+              setTimeEntrySubmitError("");
+            }
+          }}
+          placeholder="Optional note"
+        />
+      </div>
+
+      {/*
+        Shows backend/API save errors that are
+        not tied to one specific input field.
+
+        The modal stays open so the user can
+        correct the problem and retry.
+      */}
+      {timeEntrySubmitError && (
+        <p className="task-field-error">
+          {timeEntrySubmitError}
+        </p>
+      )}
+
+      <div className="task-modal-actions">
+        <button
+          type="button"
+          className="task-cancel-button"
+          onClick={closeTimeEntryModal}
+        >
+          Cancel
+        </button>
+
+        <button
+          type="button"
+          className="task-save-button"
+          onClick={handleTimeEntrySubmit}
+        >
+          {editingTimeEntryId !== null
+            ? "Save Changes"
+            : "Save Time Entry"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
+            {/*
+  Displays the time entries belonging
+  to the currently viewed task.
+*/}
+<div className="time-entry-section">
+  <div className="time-entry-header">
+    <div>
+      <h4 className="time-entry-title">
+        Time Entries
+      </h4>
+
+      <p className="time-entry-total">
+        Total Logged Time:{" "}
+        {totalLoggedMinutes} min
+      </p>
+
+      {viewedTask.estimatedMinutes !== null &&
+        remainingMinutes !== null &&
+        remainingMinutes > 0 && (
+          <p className="time-entry-remaining">
+            Remaining:{" "}
+            {remainingMinutes} min
+          </p>
+        )}
+
+      {viewedTask.estimatedMinutes !== null &&
+        exceededMinutes !== null &&
+        exceededMinutes > 0 && (
+          <p className="time-entry-exceeded">
+            Exceeded by:{" "}
+            {exceededMinutes} min
+          </p>
+        )}
+    </div>
+
+    <button
+      type="button"
+      className="add-time-entry-button"
+      onClick={openCreateTimeEntryModal}
+    >
+      + Add Time Entry
+    </button>
+  </div>
+
+  {timeEntries.length === 0 ? (
+    <div className="time-entry-empty">
+      <p className="time-entry-empty-title">
+        No time entries yet
+      </p>
+
+      <p className="time-entry-empty-text">
+        Add a time entry to log time spent
+        on this task.
+      </p>
+    </div>
+  ) : (
+    <div className="time-entry-table-wrapper">
+      <table className="time-entry-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Duration</th>
+            <th>Note</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {timeEntries.map((timeEntry) => (
+            <tr key={timeEntry.id}>
+              <td>
+                {timeEntry.date}
+              </td>
+
+              <td>
+                {timeEntry.durationMinutes} min
+              </td>
+
+              <td>
+                {timeEntry.note ||
+                  "No note"}
+              </td>
+
+              <td>
+                <button
+                  type="button"
+                  className="time-entry-edit-button"
+                  onClick={() =>
+                    openEditTimeEntryModal(
+                      timeEntry
+                    )
+                  }
+                >
+                  Edit
+                </button>
+
+                <button
+                  type="button"
+                  className="time-entry-delete-button"
+                  onClick={() =>
+                    handleDeleteTimeEntry(
+                      timeEntry
+                    )
+                  }
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</div>
 
             <div className="task-view-actions">
               <button

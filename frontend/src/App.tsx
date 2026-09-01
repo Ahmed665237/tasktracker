@@ -143,11 +143,47 @@ const App = () => {
           taskId = 15
         */}
         <Route
+          path="/projects/:projectId/tasks/:taskId/edit"
+          element={<Home />}
+        />
+
+        {/*
+          Opens one project's dashboard.
+
+          Example:
+          /projects/7
+        */}
+        <Route
           path="/projects/:projectId"
           element={<Home />}
         />
+
+        {/*
+          Opens the Add Time Entry modal.
+
+          Example:
+          /projects/7/tasks/15/time-entries/new
+
+          projectId = 7
+          taskId = 15
+        */}
         <Route
-          path="/projects/:projectId/tasks/:taskId/edit"
+          path="/projects/:projectId/tasks/:taskId/time-entries/new"
+          element={<Home />}
+        />
+
+        {/*
+          Opens the Edit Time Entry modal.
+
+          Example:
+          /projects/7/tasks/15/time-entries/3/edit
+
+          projectId = 7
+          taskId = 15
+          timeEntryId = 3
+        */}
+        <Route
+          path="/projects/:projectId/tasks/:taskId/time-entries/:timeEntryId/edit"
           element={<Home />}
         />
 
@@ -182,9 +218,9 @@ const App = () => {
   "element" is the component React displays when
   that URL matches.
 
-  The project and task modal routes all display Home,
-  because the modal must appear over the dashboard
-  instead of replacing the dashboard.
+  The project, task, and time-entry modal routes
+  all display Home, because the modal must appear
+  over the dashboard instead of replacing it.
 */
 
 export default App;

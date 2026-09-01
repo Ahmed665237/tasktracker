@@ -1,5 +1,6 @@
 import Project from "./Project.js";
 import Task from "./Task.js";
+import TimeEntry from "./TimeEntry.js";
 
 /*
   One project can contain many tasks.
@@ -20,7 +21,27 @@ Task.belongsTo(Project, {
   foreignKey: "projectId",
 });
 
+/*
+  One task can contain many time entries.
+
+  time_entries.task_id stores the task ID.
+*/
+Task.hasMany(TimeEntry, {
+  foreignKey: "taskId",
+  onDelete: "CASCADE",
+});
+
+/*
+  Every time entry belongs to one task.
+
+  timeEntry.taskId points to task.id.
+*/
+TimeEntry.belongsTo(Task, {
+  foreignKey: "taskId",
+});
+
 export {
   Project,
   Task,
+  TimeEntry,
 };
