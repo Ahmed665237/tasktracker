@@ -78,6 +78,21 @@ interface TimeEntry {
   updatedAt: string;
 }
 
+/*
+  This describes one read-only audit-history
+  record returned by the backend.
+*/
+interface TaskAudit {
+  id: number;
+  taskId: number;
+  actorUserId: number;
+  actionType: string;
+  fieldName: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+  createdAt: string;
+}
+
 function ProjectDashboard({
   currentUserName,
 }: ProjectDashboardProps) {
@@ -313,6 +328,43 @@ const [remainingMinutes, setRemainingMinutes] =
 const [exceededMinutes, setExceededMinutes] =
   useState<number | null>(null);
 
+/*
+  Stores the read-only audit-history records
+  returned by the backend for the viewed task.
+*/
+const [auditHistory, setAuditHistory] =
+  useState<TaskAudit[]>([]);
+
+/*
+  Changes whenever a Time Entry operation succeeds.
+
+  This tells React to reload the audit history
+  so the newest backend-generated event appears.
+*/
+const [auditRefreshKey, setAuditRefreshKey] =
+  useState(0);
+
+/*
+  Stores which long Audit History values
+  are currently expanded.
+
+  The key contains both the audit ID
+  and whether the value is old or new,
+  so each side can expand independently.
+*/
+const [expandedAuditValues, setExpandedAuditValues] =
+  useState<string[]>([]);
+
+/*
+  Stores which Time Entry notes are expanded.
+
+  Time Entry notes use a smaller preview than
+  Audit History values so the Time Entries table
+  stays compact and the Edit/Delete actions remain visible.
+*/
+const [expandedTimeEntryNotes, setExpandedTimeEntryNotes] =
+  useState<number[]>([]);
+
 
   /*
   Controls whether the Add/Edit Time Entry
@@ -507,6 +559,204 @@ const [timeEntrySubmitError, setTimeEntrySubmitError] =
     routeTask.id === viewingTaskId
       ? routeTask
       : null;
+
+  /*
+    Displays long Audit History values
+    without allowing them to stretch
+    and ruin the table layout.
+
+    The complete value still remains
+    stored in PostgreSQL.
+
+    Old Value and New Value use separate
+    keys so each one can expand independently.
+  */
+  const renderExpandableAuditValue = (
+    auditId: number,
+    valueType: "old" | "new",
+    value: string
+  ) => {
+    /*
+      Limits only what is displayed.
+
+      It does NOT limit what the user
+      can save in the database.
+    */
+    const characterLimit =
+      120;
+
+    const expansionKey =
+      `${auditId}-${valueType}`;
+
+    const isExpanded =
+      expandedAuditValues.includes(
+        expansionKey
+      );
+
+    /*
+      Short values do not need
+      a Read more button.
+    */
+    if (
+      value.length <= characterLimit
+    ) {
+      return value;
+    }
+
+    /*
+      When expanded, display the complete
+      value and allow it to be collapsed.
+    */
+    if (isExpanded) {
+      return (
+        <>
+          {value}
+
+          <button
+            type="button"
+            className="audit-read-more"
+            onClick={() =>
+              setExpandedAuditValues(
+                (currentValues) =>
+                  currentValues.filter(
+                    (key) =>
+                      key !== expansionKey
+                  )
+              )
+            }
+          >
+            Show less
+          </button>
+        </>
+      );
+    }
+
+    /*
+      Initially displays only the first
+      120 characters followed by ...
+    */
+    return (
+      <>
+        {value.slice(
+          0,
+          characterLimit
+        )}
+        ...
+
+        <button
+          type="button"
+          className="audit-read-more"
+          onClick={() =>
+            setExpandedAuditValues(
+              (currentValues) => [
+                ...currentValues,
+                expansionKey,
+              ]
+            )
+          }
+        >
+          Read more
+        </button>
+      </>
+    );
+  };
+
+  /*
+    Displays a Time Entry note without allowing
+    a long note to stretch the table.
+
+    Only the displayed text is shortened.
+    The complete note remains stored in PostgreSQL.
+
+    Time Entry notes use a smaller 60-character
+    preview than Audit History values.
+  */
+  const renderTimeEntryNote = (
+    timeEntry: TimeEntry
+  ) => {
+    const note =
+      timeEntry.note;
+
+    if (!note) {
+      return "No note";
+    }
+
+    const characterLimit =
+      60;
+
+    const isExpanded =
+      expandedTimeEntryNotes.includes(
+        timeEntry.id
+      );
+
+    /*
+      Short notes fit normally and do not
+      need a Read more button.
+    */
+    if (
+      note.length <= characterLimit
+    ) {
+      return note;
+    }
+
+    /*
+      Expanded notes show the complete text,
+      but the table column keeps a fixed width
+      so the Actions column does not disappear.
+    */
+    if (isExpanded) {
+      return (
+        <>
+          {note}
+
+          <button
+            type="button"
+            className="time-entry-read-more"
+            onClick={() =>
+              setExpandedTimeEntryNotes(
+                (currentIds) =>
+                  currentIds.filter(
+                    (id) =>
+                      id !== timeEntry.id
+                  )
+              )
+            }
+          >
+            Show less
+          </button>
+        </>
+      );
+    }
+
+    /*
+      Long notes initially show only the first
+      60 characters followed by ... and Read more.
+    */
+    return (
+      <>
+        {note.slice(
+          0,
+          characterLimit
+        )}
+        ...
+
+        <button
+          type="button"
+          className="time-entry-read-more"
+          onClick={() =>
+            setExpandedTimeEntryNotes(
+              (currentIds) => [
+                ...currentIds,
+                timeEntry.id,
+              ]
+            )
+          }
+        >
+          Read more
+        </button>
+      </>
+    );
+  };
 
   /*
     Opens the Create Task modal for the selected project.
@@ -954,6 +1204,14 @@ if (
     );
 
     /*
+      Reloads audit history after a successful
+      Time Entry create or edit operation.
+    */
+    setAuditRefreshKey(
+      (currentKey) => currentKey + 1
+    );
+
+    /*
       Clears and closes the Time Entry modal.
     */
     setEditingTimeEntryId(null);
@@ -1098,6 +1356,14 @@ const handleDeleteTimeEntry = async (
 
     setExceededMinutes(
       timeEntriesData.exceededMinutes
+    );
+
+    /*
+      Reloads audit history after a successful
+      Time Entry deletion.
+    */
+    setAuditRefreshKey(
+      (currentKey) => currentKey + 1
     );
   } catch (error) {
     console.error(
@@ -2198,6 +2464,89 @@ useEffect(() => {
 }, [
   viewedTask,
 ]);
+
+
+/*
+  Loads the read-only audit history for
+  the task currently being viewed.
+
+  Audit records are generated by the backend
+  and persisted in PostgreSQL.
+
+  Merely viewing the task does NOT create
+  a new audit event.
+*/
+useEffect(() => {
+  /*
+    Clears old history when no task
+    is currently open.
+  */
+  if (!viewedTask) {
+    setAuditHistory([]);
+
+    return;
+  }
+
+  const token =
+    localStorage.getItem("token");
+
+  if (!token) {
+    console.error(
+      "Authentication token is missing"
+    );
+
+    return;
+  }
+
+  const loadAuditHistory = async () => {
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/projects/${viewedTask.projectId}/tasks/${viewedTask.id}/audit-history`,
+        {
+          method: "GET",
+
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        console.error(
+          "Unable to load audit history:",
+          data
+        );
+
+        return;
+      }
+
+      /*
+        The backend already returns the
+        history newest first.
+
+        React only displays it.
+      */
+      setAuditHistory(
+        data.auditHistory
+      );
+    } catch (error) {
+      console.error(
+        "Error loading audit history:",
+        error
+      );
+    }
+  };
+
+  loadAuditHistory();
+}, [
+  viewedTask,
+  auditRefreshKey,
+]);
+
 
 /*
   Keeps the Time Entry modal synchronized
@@ -3460,7 +3809,7 @@ useEffect(() => {
 
           .task-view {
             width: 100%;
-            max-width: 680px;
+            max-width: 1100px;
             max-height: 90vh;
             overflow-y: auto;
             background: white;
@@ -3610,12 +3959,19 @@ useEffect(() => {
           }
 
           .time-entry-table-wrapper {
+            width: 100%;
             overflow-x: auto;
           }
 
           .time-entry-table {
             width: 100%;
             border-collapse: collapse;
+
+            /*
+              Keeps long notes from making the table
+              wider and pushing Edit/Delete off-screen.
+            */
+            table-layout: fixed;
           }
 
           .time-entry-table th,
@@ -3623,12 +3979,64 @@ useEffect(() => {
             padding: 12px 10px;
             border-bottom: 1px solid #e2e8f0;
             text-align: left;
+            vertical-align: top;
             font-size: 14px;
           }
 
           .time-entry-table th {
             color: #475569;
             font-weight: 700;
+          }
+
+          /*
+            Keeps Date, Duration, and Actions at
+            predictable widths while Note uses the
+            remaining space.
+          */
+          .time-entry-table th:nth-child(1),
+          .time-entry-table td:nth-child(1) {
+            width: 120px;
+          }
+
+          .time-entry-table th:nth-child(2),
+          .time-entry-table td:nth-child(2) {
+            width: 110px;
+          }
+
+          .time-entry-table th:nth-child(4),
+          .time-entry-table td:nth-child(4) {
+            width: 145px;
+            white-space: nowrap;
+          }
+
+          /*
+            Long notes wrap inside their own column
+            instead of stretching the complete table.
+          */
+          .time-entry-note {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+          }
+
+          /*
+            Small Read more / Show less control used
+            only when a Time Entry note is long.
+          */
+          .time-entry-read-more {
+            border: none;
+            background: transparent;
+            color: #087f8c;
+            padding: 0;
+            margin-left: 5px;
+            font-size: 12px;
+            font-weight: 650;
+            cursor: pointer;
+            white-space: nowrap;
+          }
+
+          .time-entry-read-more:hover {
+            text-decoration: underline;
           }
 
           .time-entry-edit-button,
@@ -3645,6 +4053,130 @@ useEffect(() => {
 
           .time-entry-delete-button {
             color: #dc3545;
+          }
+
+          /*
+            Styles the read-only Audit History section
+            inside Task Details.
+          */
+          .audit-history-section {
+            border: 1px solid #d8e1ea;
+            border-radius: 14px;
+            margin-bottom: 24px;
+            overflow: hidden;
+            background: #ffffff;
+          }
+
+          .audit-history-header {
+            padding: 18px 18px 14px;
+            border-bottom: 1px solid #e2e8f0;
+          }
+
+          .audit-history-title {
+            margin: 0 0 5px;
+            font-size: 20px;
+            font-weight: 700;
+            color: #0f172a;
+          }
+
+          .audit-history-subtitle {
+            margin: 0;
+            color: #64748b;
+            font-size: 14px;
+          }
+
+          .audit-history-empty {
+            padding: 28px;
+            text-align: center;
+            color: #64748b;
+          }
+
+          .audit-history-table-wrapper {
+            overflow-x: auto;
+          }
+
+          .audit-history-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 900px;
+          }
+
+          .audit-history-table th,
+          .audit-history-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: left;
+            vertical-align: top;
+            font-size: 13px;
+          }
+
+          .audit-history-table th {
+            background: #f8fafc;
+            color: #475569;
+            font-weight: 700;
+          }
+
+          .audit-history-table tbody tr:last-child td {
+            border-bottom: none;
+          }
+
+          .audit-action-badge {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 4px 9px;
+            font-size: 12px;
+            font-weight: 700;
+            background: #e0f2fe;
+            color: #0369a1;
+          }
+
+          .audit-action-badge.created {
+            background: #dcfce7;
+            color: #15803d;
+          }
+
+          .audit-action-badge.time-entry {
+            background: #ecfeff;
+            color: #087f8c;
+          }
+
+          .audit-old-value,
+          .audit-new-value {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+          }
+
+          /*
+            Styles the Read more / Show less
+            button used for long Audit History values.
+          */
+          .audit-read-more {
+            border: none;
+            background: transparent;
+            color: #087f8c;
+            padding: 0;
+            margin-left: 6px;
+            font-weight: 650;
+            cursor: pointer;
+          }
+
+          .audit-read-more:hover {
+            text-decoration: underline;
+          }
+
+          .audit-empty-value {
+            color: #94a3b8;
+          }
+
+          .audit-history-note {
+            margin: 0;
+            padding: 10px 18px;
+            border-top: 1px solid #e2e8f0;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: 12px;
           }
 
                     /*
@@ -4722,9 +5254,10 @@ useEffect(() => {
                 {timeEntry.durationMinutes} min
               </td>
 
-              <td>
-                {timeEntry.note ||
-                  "No note"}
+              <td className="time-entry-note">
+                {renderTimeEntryNote(
+                  timeEntry
+                )}
               </td>
 
               <td>
@@ -4759,6 +5292,227 @@ useEffect(() => {
     </div>
   )}
 </div>
+
+            {/*
+              Displays the backend-generated,
+              read-only audit history for this task.
+
+              Newest events appear first.
+              Viewing the task itself does not
+              create an audit event.
+            */}
+            <div className="audit-history-section">
+              <div className="audit-history-header">
+                <h4 className="audit-history-title">
+                  Audit History
+                </h4>
+
+                <p className="audit-history-subtitle">
+                  Chronological history of meaningful
+                  changes made to this task.
+                </p>
+              </div>
+
+              {auditHistory.length === 0 ? (
+                <div className="audit-history-empty">
+                  No audit history yet.
+                </div>
+              ) : (
+                <div className="audit-history-table-wrapper">
+                  <table className="audit-history-table">
+                    <thead>
+                      <tr>
+                        <th>Date & Time</th>
+                        <th>Actor</th>
+                        <th>Action</th>
+                        <th>Field / Activity</th>
+                        <th>Old Value</th>
+                        <th>New Value</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {auditHistory.map((audit) => {
+                        /*
+                          Converts stored Time Entry JSON
+                          into readable text for the UI.
+                        */
+                        const formatAuditValue = (
+                          value: string | null
+                        ) => {
+                          if (value === null) {
+                            return "—";
+                          }
+
+                          if (
+                            audit.actionType.startsWith(
+                              "TIME_ENTRY_"
+                            )
+                          ) {
+                            try {
+                              const parsedValue =
+                                JSON.parse(value);
+
+                              const durationText =
+                                parsedValue.durationMinutes !==
+                                undefined
+                                  ? `${parsedValue.durationMinutes} min`
+                                  : "";
+
+                              const dateText =
+                                parsedValue.date
+                                  ? `Date: ${parsedValue.date}`
+                                  : "";
+
+                              const noteText =
+                                parsedValue.note
+                                  ? `Note: ${parsedValue.note}`
+                                  : "Note: No note";
+
+                              return [
+                                durationText,
+                                dateText,
+                                noteText,
+                              ]
+                                .filter(Boolean)
+                                .join("\n");
+                            } catch {
+                              return value;
+                            }
+                          }
+
+                          return value;
+                        };
+
+                        const actionLabel =
+                          audit.actionType ===
+                          "TASK_CREATED"
+                            ? "Created"
+                            : audit.actionType ===
+                              "STATUS_CHANGED"
+                              ? "Status Changed"
+                              : audit.actionType ===
+                                "TIME_ENTRY_CREATED"
+                                ? "Time Entry Added"
+                                : audit.actionType ===
+                                  "TIME_ENTRY_UPDATED"
+                                  ? "Time Entry Edited"
+                                  : audit.actionType ===
+                                    "TIME_ENTRY_DELETED"
+                                    ? "Time Entry Deleted"
+                                    : "Updated";
+
+                        const fieldLabel =
+                          audit.fieldName ===
+                          "estimatedMinutes"
+                            ? "Estimated Time"
+                            : audit.fieldName ===
+                              "dueDate"
+                              ? "Due Date"
+                              : audit.fieldName ===
+                                "timeEntry"
+                                ? "Time Entry"
+                                : audit.fieldName
+                                  ? audit.fieldName
+                                      .charAt(0)
+                                      .toUpperCase() +
+                                    audit.fieldName.slice(1)
+                                  : "Task";
+
+                        const actionClass =
+                          audit.actionType ===
+                          "TASK_CREATED"
+                            ? "created"
+                            : audit.actionType.startsWith(
+                                "TIME_ENTRY_"
+                              )
+                              ? "time-entry"
+                              : "";
+
+                        /*
+                          Converts the old/new database values
+                          into the exact text that will be shown.
+
+                          Long text is shortened only visually
+                          by renderExpandableAuditValue below.
+                        */
+                        const formattedOldValue =
+                          formatAuditValue(
+                            audit.oldValue
+                          );
+
+                        const formattedNewValue =
+                          audit.actionType ===
+                            "TASK_CREATED" &&
+                          audit.newValue === null
+                            ? "Task created"
+                            : formatAuditValue(
+                                audit.newValue
+                              );
+
+                        return (
+                          <tr key={audit.id}>
+                            <td>
+                              {new Date(
+                                audit.createdAt
+                              ).toLocaleString()}
+                            </td>
+
+                            <td>
+                              {currentUserName}
+                            </td>
+
+                            <td>
+                              <span
+                                className={`audit-action-badge ${actionClass}`}
+                              >
+                                {actionLabel}
+                              </span>
+                            </td>
+
+                            <td>
+                              {fieldLabel}
+                            </td>
+
+                            <td
+                              className={
+                                audit.oldValue === null
+                                  ? "audit-empty-value"
+                                  : "audit-old-value"
+                              }
+                            >
+                              {renderExpandableAuditValue(
+                                audit.id,
+                                "old",
+                                formattedOldValue
+                              )}
+                            </td>
+
+                            <td
+                              className={
+                                audit.newValue === null
+                                  ? "audit-empty-value"
+                                  : "audit-new-value"
+                              }
+                            >
+                              {renderExpandableAuditValue(
+                                audit.id,
+                                "new",
+                                formattedNewValue
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <p className="audit-history-note">
+                Audit history is read only.
+              </p>
+            </div>
 
             <div className="task-view-actions">
               <button

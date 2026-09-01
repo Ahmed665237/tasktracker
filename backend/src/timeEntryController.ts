@@ -7,6 +7,7 @@ import type {
 import Project from "./Project.js";
 import Task from "./Task.js";
 import TimeEntry from "./TimeEntry.js";
+import TaskAudit from "./TaskAudit.js";
 import logger from "./utils/logger.js";
 
 /*
@@ -239,6 +240,46 @@ export const createTimeEntry = async (
             ? note.trim()
             : null,
       });
+
+    /*
+      Creates an audit-history record
+      when a new time entry is created.
+
+      There is no old value because
+      this time entry did not exist before.
+    */
+    await TaskAudit.create({
+      taskId:
+        taskId,
+
+      actorUserId:
+        userId,
+
+      actionType:
+        "TIME_ENTRY_CREATED",
+
+      fieldName:
+        "timeEntry",
+
+      oldValue:
+        null,
+
+      /*
+        Stores the important time-entry values
+        as text inside the audit record.
+      */
+      newValue:
+        JSON.stringify({
+          durationMinutes:
+            newTimeEntry.durationMinutes,
+
+          date:
+            newTimeEntry.date,
+
+          note:
+            newTimeEntry.note,
+        }),
+    });
 
     logger.info(
       `Time entry created successfully for user ${userId}` // this is the message parameter in logger
@@ -545,6 +586,22 @@ export const updateTimeEntry = async (
     }
 
     /*
+      Saves the old time-entry values
+      before updating the database.
+
+      We need these values so we can
+      compare the old entry with the new entry.
+    */
+    const oldDurationMinutes =
+      timeEntry.durationMinutes;
+
+    const oldDate =
+      timeEntry.date;
+
+    const oldNote =
+      timeEntry.note;
+
+    /*
       Updates the existing PostgreSQL row.
     */
     await timeEntry.update({
@@ -560,6 +617,73 @@ export const updateTimeEntry = async (
           ? note.trim()
           : null,
     });
+
+    /*
+      Checks whether at least one part
+      of the time entry actually changed.
+
+      Simply pressing Save without making
+      a change does NOT create audit history.
+    */
+    if (
+      oldDurationMinutes !==
+        timeEntry.durationMinutes ||
+      oldDate !==
+        timeEntry.date ||
+      oldNote !==
+        timeEntry.note
+    ) {
+      /*
+        Creates one audit-history record
+        describing the old and new
+        time-entry values.
+      */
+      await TaskAudit.create({
+        taskId:
+          taskId,
+
+        actorUserId:
+          userId,
+
+        actionType:
+          "TIME_ENTRY_UPDATED",
+
+        fieldName:
+          "timeEntry",
+
+        /*
+          Stores the values before
+          the time entry was edited.
+        */
+        oldValue:
+          JSON.stringify({
+            durationMinutes:
+              oldDurationMinutes,
+
+            date:
+              oldDate,
+
+            note:
+              oldNote,
+          }),
+
+        /*
+          Stores the values after
+          the time entry was edited.
+        */
+        newValue:
+          JSON.stringify({
+            durationMinutes:
+              timeEntry.durationMinutes,
+
+            date:
+              timeEntry.date,
+
+            note:
+              timeEntry.note,
+          }),
+      });
+    }
 
     return res.status(200).json({
       message:
@@ -647,10 +771,64 @@ export const deleteTimeEntry = async (
     }
 
     /*
+      Saves the values before deletion.
+
+      Once the time entry is deleted,
+      these values would no longer be
+      available from PostgreSQL.
+    */
+    const deletedDurationMinutes =
+      timeEntry.durationMinutes;
+
+    const deletedDate =
+      timeEntry.date;
+
+    const deletedNote =
+      timeEntry.note;
+
+    /*
       Hard deletes the time entry
       from PostgreSQL.
     */
     await timeEntry.destroy();
+
+    /*
+      Creates an audit-history record
+      after the time entry was successfully deleted.
+
+      The deleted values are stored as the old value
+      because they existed before the deletion.
+
+      There is no new value after deletion.
+    */
+    await TaskAudit.create({
+      taskId:
+        taskId,
+
+      actorUserId:
+        userId,
+
+      actionType:
+        "TIME_ENTRY_DELETED",
+
+      fieldName:
+        "timeEntry",
+
+      oldValue:
+        JSON.stringify({
+          durationMinutes:
+            deletedDurationMinutes,
+
+          date:
+            deletedDate,
+
+          note:
+            deletedNote,
+        }),
+
+      newValue:
+        null,
+    });
 
     return res.status(200).json({
       message:
