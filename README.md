@@ -24,6 +24,31 @@ Before running the project locally, make sure you have:
 
 You will also need to create the PostgreSQL database before running the migrations.
 
+## Running With Docker
+
+Docker Compose runs the PostgreSQL database, backend, and frontend together:
+
+```bash
+docker compose up --build
+```
+
+The backend automatically runs the database migrations before starting. No database
+backup is restored and no seeders are executed. Open the frontend at
+`http://localhost:5173` and the API documentation at `http://localhost:3000/api-docs`.
+
+To stop the containers:
+
+```bash
+docker compose down
+```
+
+The database uses a Docker volume so its data persists between container restarts.
+To remove that data and create a completely fresh database, run:
+
+```bash
+docker compose down -v
+```
+
 ---
 
 # Frontend

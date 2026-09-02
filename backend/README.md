@@ -83,3 +83,18 @@ npx sequelize-cli db:seed:undo:all
 ```bash
 npx sequelize-cli db:migrate:undo:all
 ```
+
+# Recommended: Run With Docker
+
+The easiest way to run TaskTracker is through Docker Compose.
+
+Docker Compose starts:
+
+- PostgreSQL
+- Backend
+- Frontend
+
+From the TaskTracker project root, run:
+
+```bash
+docker compose up --build
